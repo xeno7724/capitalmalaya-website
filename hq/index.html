@@ -150,6 +150,7 @@ label:has(input:checked) .t{text-decoration:line-through;color:var(--mut)}
 .empty{color:var(--mut);font-size:14px;padding:12px 0;border-bottom:1px solid var(--line)}
 .txt{flex:1;font:600 16px "Inter Tight",system-ui,sans-serif;color:var(--ink);background:transparent;border:0;border-bottom:1px dashed var(--soft);padding:10px 0;min-height:44px;border-radius:0}
 .txt.hd{font-size:17px;font-weight:800}
+.srcbar{display:flex;height:14px;background:var(--line);margin-top:14px}.srcbar i{display:block;height:100%}.seg{display:inline-flex;margin-top:12px;border:1.5px solid var(--ink)}.seg button{border:0;min-height:36px;padding:0 14px;font:600 13px "Inter Tight",system-ui,sans-serif;background:transparent;color:var(--ink);cursor:pointer}.seg button.on{background:var(--ink);color:var(--bg)}
 .guide{margin-top:40px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.guide summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:18px 0;font-size:17px;font-weight:800}.guide summary::-webkit-details-marker{display:none}.guide[open] summary span{transform:rotate(45deg)}.guide summary span{transition:transform .2s;font-size:22px;font-weight:400}.gflow{list-style:none;margin:0;padding:0}.gflow li,.glist div{display:flex;flex-direction:column;gap:2px;padding:10px 0;border-top:1px solid var(--line)}.gflow b,.glist b{font-size:15px}.gflow span,.glist span{font-size:14px;color:var(--mut)}.gh{margin:22px 0 6px;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}.gp{margin:0;font-size:15px}.guide>p:last-child{padding-bottom:20px}
 .sub3{display:flex;justify-content:space-between;align-items:baseline;margin:22px 0 4px;font-size:16px;font-weight:800}.sub3 span{font-size:13px;font-weight:600;color:var(--mut)}
 [data-edit]{flex:none;white-space:nowrap}
@@ -294,7 +295,10 @@ body.authed .topbar{display:flex}
   <h2>Company capital <span id="icap"></span></h2>
   <div class="fig"><svg id="ccap" role="img" aria-label="Company capital over time"></svg></div>
   <div class="lgd"><span><i></i>Capital (60% of trading payouts + investment + business income, minus spending)</span></div>
+  <h2>Money in by source <span id="isrt"></span></h2>
+  <div id="isrc"></div>
   <h2>Where the money goes <span id="ispt"></span></h2>
+  <div class="seg" id="ipm" role="group" aria-label="Group spending by"><button type="button" data-pm="c" class="on">By category</button><button type="button" data-pm="s">By section</button></div>
   <div class="pie" id="ipie"></div>
   <h2>Leaderboard <span>7-day average</span></h2>
   <div id="ilb"></div>
@@ -575,10 +579,10 @@ function renderSec(k,soft){const p=document.getElementById("p-"+k);if(soft&&busy
 /* ---- insights ---- */
 function renderInsights(){const S=R.map(x=>({...x,s:stats(x.k)})),c=co(),tot=c.payouts.reduce((a,x)=>a+(+x.a||0),0);
   const t7=S.reduce((a,x)=>a+x.s.a7,0)/3,t30=S.reduce((a,x)=>a+x.s.a30,0)/3,top=S.slice().sort((a,b)=>b.s.streak-a.s.streak)[0];
-  document.getElementById("ik").innerHTML=[[pc(t7),"Team 7-day average"],[pc(t30),"Team 30-day average"],[top.s.streak?top.s.streak+" days":"–",top.s.streak?"Longest streak now · "+top.t:"Longest streak now"],[money(capital()),"Company capital"]].map(x=>`<div class="kpi"><b>${x[0]}</b><span>${esc(x[1])}</span></div>`).join("");
+  document.getElementById("ik").innerHTML=[[pc(t7),"Team 7-day average"],[pc(t30),"Team 30-day average"],[top.s.streak?top.s.streak+" days":"–",top.s.streak?"Longest streak now · "+top.t:"Longest streak now"],[money(moneyIn()),"Money in"],[money(capital()),"Company capital"],[money(netWorth()),"Net worth"]].map(x=>`<div class="kpi"><b>${x[0]}</b><span>${esc(x[1])}</span></div>`).join("");
   document.getElementById("ilb").innerHTML=S.slice().sort((a,b)=>b.s.a7-a.s.a7).map((x,i)=>`<div class="tr"><div><b>${i+1}. ${x.t}</b><small>${esc(dispName(x.k)||"unclaimed")}</small></div><div class="track"><i style="width:${Math.round(x.s.a7*100)}%"></i></div><span>${pc(x.s.a7)}</span></div>`).join("");
   document.getElementById("itb").innerHTML=`<table class="stack"><thead><tr><th>Officer</th><th>Today</th><th>7 days</th><th>30 days</th><th>Streak</th><th>Best</th><th>Winning days</th></tr></thead><tbody>${S.map(x=>`<tr><td><b>${x.t}</b></td><td>${pc(x.s.t)}</td><td>${pc(x.s.a7)}</td><td>${pc(x.s.a30)}</td><td>${x.s.streak}</td><td>${x.s.best}</td><td>${x.s.wins}/${x.s.n}</td></tr>`).join("")}</tbody></table><p class="hint" style="margin-top:10px">A winning day is 80% or more of the daily list.</p>`;
-  drawChart();drawCap();drawPie()}
+  drawChart();drawCap();drawSrc();drawPie()}
 
 function capSeries(){const c=co(),len=Math.max(2,Math.min(daysRun(),180)),keys=[];for(let i=len-1;i>=0;i--)keys.push(back(i));
   const v=keys.map(k=>c.payouts.filter(p=>p.d<=k).reduce((a,p)=>a+(+p.a||0),0)*.6+c.binc.filter(p=>p.d<=k).reduce((a,p)=>a+(+p.a||0),0)+c.iinc.filter(p=>p.d<=k).reduce((a,p)=>a+(+p.a||0),0)-c.spend.filter(s=>s.d<=k).reduce((a,s)=>a+(+s.a||0),0));return{keys,v}}
@@ -593,13 +597,19 @@ function drawCap(){const s=document.getElementById("ccap");if(!s)return;const W=
   if(v.every(x=>x===0))g+=`<text x="${L+iw/2}" y="${T+ih/2}" text-anchor="middle" font-size="13" style="fill:var(--mut)">Grows with the first payout</text>`;
   g+=`<text x="${L}" y="${H-4}" font-size="11" style="fill:var(--mut)">${f(keys[0])}</text><text x="${W-Rr}" y="${H-4}" text-anchor="end" font-size="11" style="fill:var(--mut)">Today</text>`;
   s.innerHTML=g;document.getElementById("icap").textContent=money(v[len-1])+" now"}
+let pieMode="c";
+function drawSrc(){const el=document.getElementById("isrc");if(!el)return;const parts=[["Trading · company 60%",trdIn(),100],["Investment",invIn(),60],["Business",secIn("biz"),28]],tot=parts.reduce((a,x)=>a+x[1],0);
+  document.getElementById("isrt").textContent=tot?money(tot)+" total":"";
+  el.innerHTML=(tot?`<div class="srcbar" aria-hidden="true">${parts.map(x=>x[1]?`<i style="width:${x[1]/tot*100}%;background:color-mix(in srgb,var(--ink) ${x[2]}%,var(--bg))"></i>`:"").join("")}</div>`:"")+`<div class="pl" style="margin-top:8px">${parts.map(x=>`<div><b><i style="background:color-mix(in srgb,var(--ink) ${x[2]}%,var(--bg))"></i>${x[0]}</b><span>${money(x[1])}${tot?" · "+Math.round(x[1]/tot*100)+"%":""}</span></div>`).join("")}</div>`+(tot?"":`<p class="hint" style="margin-top:6px">Fills in with the first payout or income.</p>`)}
 function drawPie(){const el=document.getElementById("ipie");if(!el)return;const c=co(),tot=spent(),sh=[100,88,77,66,56,47,39,31,24,17];
-  const per=CATS.map(k=>c.spend.filter(s=>s.c===k).reduce((a,s)=>a+(+s.a||0),0));
+  const sw=document.getElementById("ipm");if(sw&&!sw.dataset.on){sw.dataset.on=1;sw.addEventListener("click",e=>{const b=e.target.closest("[data-pm]");if(!b)return;pieMode=b.dataset.pm;sw.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));drawPie()})}
+  const KEYS=pieMode==="s"?Object.keys(SFOR):CATS,LBL=k=>pieMode==="s"?SFOR[k]:k;
+  const per=KEYS.map(k=>c.spend.filter(s=>pieMode==="s"?(s.s||"hq")===k:s.c===k).reduce((a,s)=>a+(+s.a||0),0));
   document.getElementById("ispt").textContent=tot?money(tot)+" spent":"";
   if(!tot){el.innerHTML=`<div class="empty" style="flex:1">No spending yet. Add it in Company and the pie fills in.</div>`;return}
   let a0=-Math.PI/2,paths="";per.forEach((v,i)=>{if(!v)return;const a1=a0+v/tot*Math.PI*2,big=a1-a0>Math.PI?1:0,col=`color-mix(in srgb,var(--ink) ${sh[i]}%,var(--bg))`;
     paths+=v===tot?`<circle cx="50" cy="50" r="46" style="fill:${col}"/>`:`<path d="M50 50L${50+46*Math.cos(a0)} ${50+46*Math.sin(a0)}A46 46 0 ${big} 1 ${50+46*Math.cos(a1)} ${50+46*Math.sin(a1)}Z" style="fill:${col};stroke:var(--bg);stroke-width:1"/>`;a0=a1});
-  el.innerHTML=`<svg viewBox="0 0 100 100" role="img" aria-label="Company spending by category">${paths}</svg><div class="pl">${CATS.map((k,i)=>per[i]?`<div><b><i style="background:color-mix(in srgb,var(--ink) ${sh[i]}%,var(--bg))"></i>${esc(k)}</b><span>${money(per[i])} · ${Math.round(per[i]/tot*100)}%</span></div>`:"").join("")}</div>`}
+  el.innerHTML=`<svg viewBox="0 0 100 100" role="img" aria-label="Company spending by category">${paths}</svg><div class="pl">${KEYS.map((k,i)=>per[i]?`<div><b><i style="background:color-mix(in srgb,var(--ink) ${sh[i]}%,var(--bg))"></i>${esc(LBL(k))}</b><span>${money(per[i])} · ${Math.round(per[i]/tot*100)}%</span></div>`:"").join("")}</div>`}
 const capRO=new ResizeObserver(drawCap);
 function drawChart(){const s=document.getElementById("ich"),W=s.clientWidth,H=s.clientHeight;if(!W||!H)return;
   const len=Math.min(30,daysRun()),keys=[];for(let i=len-1;i>=0;i--)keys.push(back(i));
