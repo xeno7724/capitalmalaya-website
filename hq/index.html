@@ -426,7 +426,7 @@ const pc=v=>Math.round(v*100)+"%";
 function headHTML(k){const o=R.find(x=>x.k===k),r=role(k),s=stats(k),it=r.secs.flatMap(x=>x.items),done=it.filter(i=>r.checks[today+":"+i.id]).length;
   const claimed=["ceo","cfo","coo"].some(x=>D[x]&&D[x].uid&&D[x].uid===me);
   const nmH=dispName(k)?`<b>${esc(dispName(k))}</b>`:"";
-  const who=r.uid?`${nmH}<span>${mine(k)?"· this is you":"· claimed"}</span>${owner&&!mine(k)?`<button type="button" data-release="${k}">Release role</button>`:""}`:`${nmH}<span>${nmH?"· ":""}not claimed yet</span>${db&&me&&!claimed?`<button type="button" class="solid" data-claim="${k}">This is me</button>`:""}`;
+  const who=r.uid?`${nmH}<span>${mine(k)?"· this is you":"· claimed"}</span>`:`${nmH}<span>${nmH?"· ":""}not claimed yet</span>${db&&me&&!claimed?`<button type="button" class="solid" data-claim="${k}">This is me</button>`:""}`;
   return `<div class="top"><div><h1>${o.t}.</h1><p class="sub">${o.n}. ${o.d}</p></div>${canEdit(k)?`<button type="button" data-edit="${k}" class="${edit[k]?"solid":""}">${edit[k]?"Done":"Edit"}</button>`:""}</div>
   <div class="who">${who}</div>
   <div class="hero"><div class="big"><small>Today</small>${pc(s.t)}</div><div class="today"><b>${done}/${it.length}</b><span>${s.streak} day streak · 7-day ${pc(s.a7)}</span></div></div>`}
@@ -445,7 +445,7 @@ function listHTML(k){const r=role(k),ed=edit[k]&&canEdit(k),can=mine(k);
       :`<div class="it"><label><input type="checkbox" data-ck="${k}|${i.id}" ${r.checks[today+":"+i.id]?"checked":""} ${can?"":"disabled"}><span class="t">${esc(i.t)}</span></label></div>`).join("")||(ed?"":`<div class="empty">Empty. Tap Edit to add tasks.</div>`);
     return `<div class="sec">${head}${items}${ed?`<form class="add" data-additem="${k}|${s.id}"><input class="txt" placeholder="Add a task…" aria-label="New task"><button type="submit">Add</button></form>`:""}</div>`}).join("");
   const note=!can&&!ed&&db?`<p class="hint" style="margin-top:12px">${r.uid?"Only "+esc(dispName(k)||"the role holder")+" can tick this list.":"Claim this role above to start ticking."}</p>`:"";
-  return (ed?`<div class="sec"><div class="sh"><b>Name shown for this role</b></div><div class="it"><input class="txt" value="${esc(r.name||"")}" data-rname="${k}" placeholder="Full name" aria-label="Name for this role"></div></div>`:"")+(secs||`<div class="empty">No checklist yet.</div>`)+note+(ed?`<div class="row" style="margin-top:20px"><button type="button" data-addsec="${k}">+ New section</button>${owner&&r.uid?`<button type="button" data-release="${k}">Release this role</button>`:""}</div>`:"")}
+  return (ed?`<div class="sec"><div class="sh"><b>Name shown for this role</b></div><div class="it"><input class="txt" value="${esc(r.name||"")}" data-rname="${k}" placeholder="Full name" aria-label="Name for this role"></div></div>`:"")+(secs||`<div class="empty">No checklist yet.</div>`)+note+(ed?`<div class="row" style="margin-top:20px"><button type="button" data-addsec="${k}">+ New section</button></div>`:"")}
 function pastHTML(k){const n=role(k).notes,ks=Object.keys(n).filter(x=>x!==today&&String(n[x]).trim()).sort().reverse().slice(0,14);
   return `<div class="row" style="margin:6px 0 10px"><button type="button" data-tab="history">See every day in History</button></div>`+(ks.length?ks.map(x=>`<div class="pg pe"><div class="pd"><b>${longDate(x)}</b></div><div class="lined">${esc(n[x])}</div></div>`).join(""):`<div class="empty">Past updates will collect here, newest first.</div>`)}
 function renderRole(k,soft){const p=document.getElementById("p-"+k);if(soft&&busyIn(p))return;
@@ -652,7 +652,7 @@ document.body.addEventListener("click",e=>{const t=e.target.closest("button");if
   if(d.delnt){const n=nts();n.items=n.items.filter(x=>x.id!==d.delnt);put("company/notices",n);renderBell();return}
   if(d.clrmeet){nts().meet=null;put("company/notices",nts());renderAll();return}
   if(d.tab){const t=d.tab==="founders"?lastF:d.tab;location.hash=t;show(t);window.scrollTo(0,0)}
-  else if(d.claim){const r=role(d.claim);if(!r.uid&&me){r.uid=me;saveRole(d.claim);refreshNames();renderAll()}}
+  else if(d.claim){const r=role(d.claim);const has=["ceo","cfo","coo"].some(x=>D[x]&&D[x].uid===me);if(!r.uid&&me&&!has){r.uid=me;saveRole(d.claim);refreshNames();renderAll()}}
   else if(d.release){const r=role(d.release);r.uid=null;saveRole(d.release);renderAll()}
   else if(d.edit){edit[d.edit]=!edit[d.edit];renderAll()}
   else if(d.cm){const[k,n]=d.cm.split("|");calM[k]+=+n;document.getElementById("c-"+k).innerHTML=calHTML(k)}
