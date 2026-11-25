@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capital Malaya HQ</title>
+<script src="/config.js"></script>
+<meta name="robots" content="noindex">
+<link rel="manifest" href="/hq/manifest.json">
+<script>
+/* Supabase bridge: gives the HQ the same db / user / assets it had as a Claude artifact */
+(function(){
+  let done;const ready=new Promise(r=>done=r);const domReady=new Promise(r=>{if(document.readyState!=="loading")r();else document.addEventListener("DOMContentLoaded",r)});
+  window.claude={use:n=>ready.then(x=>x?x[n]||null:null)};
+  const C=window.CM_CONFIG||{};
+  if(!C.SUPABASE_URL||C.SUPABASE_URL.includes("YOUR-")){done(null);return}
+  import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm").then(({createClient})=>{
+    const sb=createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY);window.__sb=sb;
+    const gate=()=>document.getElementById("gate");
+    let started=false;
+    async function start(session){
+      if(started)return;started=true;await domReady;const u=session.user,email=(u.email||"").toLowerCase();
+      const {data:f}=await sb.from("founders").select("email,is_owner").eq("email",email).maybeSingle();
+      if(!f){document.getElementById("gate-msg").textContent="This account isn't on the founders list. Ask Aqid to add your email.";started=false;await sb.auth.signOut();return}
+      gate().hidden=true;document.body.classList.add("authed");
+      const chans={};
+      const db={
+        collection:c=>({onSnapshot:(cb,err)=>{
+          const load=async()=>{const {data,error}=await sb.from("hq_docs").select("id,data").eq("collection",c);if(error){err&&err(error);return}cb({docs:data.map(r=>({id:r.id,data:()=>r.data}))})};
+          load();if(!chans[c])chans[c]=sb.channel("hq-"+c).on("postgres_changes",{event:"*",schema:"public",table:"hq_docs",filter:"collection=eq."+c},load).subscribe();
+          document.addEventListener("visibilitychange",()=>{if(!document.hidden)load()});
+        }}),
+        doc:p=>({set:async o=>{const i=p.indexOf("/"),c=p.slice(0,i),id=p.slice(i+1);const {error}=await sb.from("hq_docs").upsert({collection:c,id,data:o,updated_by:u.id,updated_at:new Date().toISOString()});if(error)throw error}})
+      };
+      const user={id:async()=>u.id,isOwner:async()=>!!f.is_owner,profiles:async ids=>{const {data}=await sb.from("founders").select("user_id,name").in("user_id",ids);const o={};(data||[]).forEach(r=>o[r.user_id]={name:r.name});return o}};
+      const assets={upload:async blob=>{const path=u.id+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,8)+".jpg";const {error}=await sb.storage.from("hq-photos").upload(path,blob,{contentType:blob.type||"image/jpeg"});if(error)throw error;return{id:sb.storage.from("hq-photos").getPublicUrl(path).data.publicUrl}}};
+      done({db,user,assets});
+    }
+    document.addEventListener("DOMContentLoaded",()=>{
+      const gf=document.getElementById("gate-form"),gm=document.getElementById("gate-msg");
+      gf.addEventListener("submit",async e=>{e.preventDefault();gm.textContent="Signing in…";const {error}=await sb.auth.signInWithPassword({email:gf.email.value.trim(),password:gf.password.value});gm.textContent=error?"Wrong email or password.":""});
+      document.getElementById("signout").addEventListener("click",async()=>{await sb.auth.signOut();location.reload()});
+    });
+    sb.auth.getSession().then(async({data:{session}})=>{if(session)start(session);else{await domReady;gate().hidden=false;const m=document.getElementById("conn");if(m)m.textContent="Sign in to see the team's live data."}});
+    sb.auth.onAuthStateChange((_e,ses)=>{if(ses)start(ses)});
+  }).catch(()=>done(null));
+})();
+</script>
+<link rel="icon" type="image/png" href="/assets/icon.png">
+<link rel="apple-touch-icon" href="/assets/icon.png">
+<meta name="apple-mobile-web-app-title" content="CM HQ">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm, firm, minimalist — the same black and white notebook as Life Maxing
+   IDEA: a founders' logbook: one page per officer, plus the company ledger
+   PICTURE: each officer's big "today %" and month calendar; team bars on Overall
+   COLOUR & TYPE: black & white, green/red only on calendars; Inter Tight
+   LAYOUT: sticky tabs CEO · CFO · COO · Insights · Overall; one calm column */
+:root{color-scheme:light dark;--bg:light-dark(#fff,#000);--ink:light-dark(#000,#fff);--mut:light-dark(#777,#888);--line:light-dark(#e4e4e4,#222);--soft:light-dark(#bdbdbd,#555)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Inter Tight",system-ui,sans-serif;overflow-x:clip}
+.w{max-width:620px;margin:0 auto;padding:30px 20px 80px}
+.tabs{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;max-width:620px;margin:0 auto;padding:10px 12px 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;border-bottom:3px solid transparent;flex:1 0 auto;min-height:46px;color:var(--mut);padding:0 10px}
+.tabs button.on{border-bottom-color:var(--ink);color:var(--ink)}
+.brand{max-width:620px;margin:0 auto;padding:12px 20px 0}
+.brand img{display:block;height:32px;width:auto;border-radius:3px}
+.brand{display:flex;justify-content:space-between;align-items:center}
+.bell{position:relative;width:44px;height:44px;display:grid;place-items:center;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;padding:0}
+.bell[aria-expanded=true]{background:var(--ink);color:var(--bg)}
+.badge{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#dc2626;color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center}
+.badge[hidden]{display:none}
+.np{max-width:620px;margin:10px auto 0;padding:0 20px}
+.np[hidden]{display:none}
+.npi{border:1px solid var(--ink);padding:18px}
+.npi h2{margin:0 0 10px!important;font-size:20px!important}
+.meet{padding:14px;background:color-mix(in srgb,var(--ink) 6%,var(--bg));margin-bottom:14px}
+.meet b{display:block;font-size:20px}.meet span{display:block;color:var(--mut);font-size:14px;margin-top:4px;white-space:pre-wrap}
+.nti{padding:12px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}.nti div{flex:1}.nti p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.nti small{color:var(--mut);font-size:12px}.nti.new p{font-weight:700}
+.achv{border-left:2px solid var(--ink);margin:6px 0 0 6px;padding-left:18px}.ac{position:relative;padding:10px 0 14px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}.ac::before{content:"";position:absolute;left:-25px;top:16px;width:12px;height:12px;border-radius:50%;background:var(--ink)}.ac time{font-size:13px;color:var(--mut);flex:0 0 100%}.ac p{margin:0;font-weight:600;flex:1}
+.pick{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px dashed var(--soft);cursor:pointer;font-size:14px;font-weight:600}.pick.sm{min-height:34px;font-size:13px;padding:0 10px;flex:0 0 auto}.pick.on{border-style:solid;border-color:var(--ink)}
+.acg{flex:0 0 100%;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0 4px}.acg figure{position:relative;margin:0;aspect-ratio:4/3;overflow:hidden;background:var(--line)}.acg img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}.acg .del{position:absolute;top:4px;right:4px;background:var(--bg)}
+.lb{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.88);display:grid;place-items:center;padding:20px;cursor:zoom-out}.lb img{max-width:100%;max-height:100%;object-fit:contain}
+.dcat{margin:16px 0 0;font-size:13px;font-weight:700;color:var(--mut)}.dc{display:flex;align-items:center;gap:10px}.dc a{flex:1;color:var(--ink);font-weight:600;overflow-wrap:anywhere}.dc small{color:var(--mut);font-size:12px}
+.nextm{margin:8px 0 0;font-size:14px;font-weight:600}
+.legal{max-width:620px;margin:-40px auto 0;padding:0 20px 28px;text-align:right;font-size:12px;line-height:1.6;color:var(--mut)}
+.conn{max-width:620px;margin:0 auto;padding:8px 20px 0;font-size:13px;color:var(--mut)}
+.pane{display:none}
+body[data-tab=ceo] #p-ceo,body[data-tab=cfo] #p-cfo,body[data-tab=coo] #p-coo,body[data-tab=insights] #p-insights,body[data-tab=overall] #p-overall,body[data-tab=history] #p-history,body[data-tab=company] #p-company,body[data-tab=biz] #p-biz,body[data-tab=trd] #p-trd{display:block}
+.subtabs{display:none;max-width:620px;margin:0 auto;padding:12px 20px 0;gap:8px}
+body[data-tab=ceo] .subtabs,body[data-tab=cfo] .subtabs,body[data-tab=coo] .subtabs{display:flex}
+.subtabs button{flex:1;min-height:40px;border:1px solid var(--line);background:transparent;color:var(--mut);font:inherit;font-weight:600;cursor:pointer}
+.subtabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.secrow{display:flex;justify-content:space-between;align-items:center;width:100%;padding:16px 0;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:inherit;cursor:pointer;text-align:left}
+.secrow b{font-size:18px}.secrow small{display:block;color:var(--mut);font-size:13px;font-weight:400;margin-top:2px}.secrow span{font-size:22px;font-weight:800}
+.lead{margin:6px 0 0;font-size:14px;color:var(--mut)}.lead b{color:var(--ink)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.chips button{min-height:36px;font-size:13px;padding:0 10px;border-color:var(--line);color:var(--mut)}.chips button.on{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.hrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+h1{font-size:clamp(44px,12vw,72px);font-weight:800;line-height:.95;letter-spacing:-.04em;margin:0}
+.sub{color:var(--mut);margin:10px 0 0}
+button{font:600 15px "Inter Tight",system-ui,sans-serif;color:var(--ink);background:transparent;border:1.5px solid var(--ink);min-height:44px;padding:0 16px;cursor:pointer}
+button.solid{background:var(--ink);color:var(--bg)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.who{margin-top:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--mut)}
+.who b{color:var(--ink);font-size:18px}
+.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-top:26px;padding-bottom:20px;border-bottom:2px solid var(--ink)}
+.big{font-size:clamp(64px,20vw,112px);font-weight:300;line-height:.85;letter-spacing:-.05em;white-space:nowrap}
+.big small{display:block;font-size:14px;font-weight:600;letter-spacing:0;color:var(--mut);margin-bottom:8px}
+.today{text-align:right}
+.today b{font-size:36px;font-weight:800;letter-spacing:-.03em;display:block;line-height:1;white-space:nowrap}
+.today span{color:var(--mut);font-size:14px}
+.cal{margin-top:26px}
+.ch{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ch b{font-size:20px;letter-spacing:-.02em;display:block}.ch span{color:var(--mut);font-size:14px}
+.nav{display:flex;gap:6px}.nav button{min-width:44px;padding:0;font-size:18px}
+.cg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
+.wd{font-size:12px;color:var(--mut);text-align:center}
+.c{aspect-ratio:1/1.05;border:1px solid var(--line);padding:4px 5px;display:flex;flex-direction:column;font-size:11px;line-height:1.2}
+.c .n{color:var(--mut)}
+.c .p{font-weight:800;font-size:clamp(11px,3.4vw,17px);text-align:center;letter-spacing:-.03em;margin:auto 0}
+.c.e,.c.has{border-color:transparent}
+.c.lt{color:#fff}.c.lt .n{color:#fff;opacity:.75}
+.c.td{outline:2px solid var(--ink);outline-offset:2px}
+h2{font-size:28px;font-weight:800;letter-spacing:-.03em;margin:52px 0 4px;display:flex;flex-wrap:wrap;gap:2px 12px;justify-content:space-between;align-items:baseline}
+h2 span{font-size:14px;font-weight:600;color:var(--mut);letter-spacing:0}
+.hint{color:var(--mut);font-size:14px;margin:0 0 8px}
+.sec{margin-top:22px}
+.sh{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--ink);padding-bottom:6px;min-height:36px}
+.sh b{font-size:17px}.sh span{font-size:13px;color:var(--mut)}
+.it{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+label{display:flex;gap:14px;align-items:center;padding:12px 0;cursor:pointer;min-height:48px;flex:1}
+input[type=checkbox]{appearance:none;width:22px;height:22px;flex:none;border:1.5px solid var(--ink);margin:0;display:grid;place-items:center;cursor:pointer;background:transparent}
+input[type=checkbox]:checked{background:var(--ink)}
+input[type=checkbox]:checked::after{content:"";width:10px;height:5px;border:2px solid var(--bg);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+input[type=checkbox]:disabled{opacity:.45;cursor:default}label:has(input:disabled){cursor:default}
+.t{font-weight:600}
+label:has(input:checked) .t{text-decoration:line-through;color:var(--mut)}
+.empty{color:var(--mut);font-size:14px;padding:12px 0;border-bottom:1px solid var(--line)}
+.txt{flex:1;font:600 16px "Inter Tight",system-ui,sans-serif;color:var(--ink);background:transparent;border:0;border-bottom:1px dashed var(--soft);padding:10px 0;min-height:44px;border-radius:0}
+.txt.hd{font-size:17px;font-weight:800}
+.del{border:0;min-width:44px;padding:0;font-size:22px;font-weight:300;color:var(--mut);flex:none}
+.add{display:flex;gap:8px;padding:10px 0;flex-wrap:wrap}
+.add .txt{font-weight:400}
+.add button{flex:none}
+.fld{font:16px "Inter Tight",system-ui,sans-serif;color:var(--ink);background:var(--bg);border:1.5px solid var(--ink);border-radius:0;min-height:44px;padding:0 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.pg{margin-top:14px;border:1.5px solid var(--ink);padding:16px 18px 14px}
+.pd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:2px solid var(--ink);padding-bottom:8px}
+.pd b{font-size:17px}.pd span{font-size:13px;color:var(--mut);white-space:nowrap}
+.lined{display:block;width:100%;border:0;border-radius:0;outline:none;resize:vertical;padding:0;margin:0;color:var(--ink);font:17px/32px "Inter Tight",system-ui,sans-serif;background:repeating-linear-gradient(to bottom,transparent 0 31px,var(--line) 31px 32px);background-attachment:local}
+textarea.lined{min-height:224px}textarea.lined:disabled{color:var(--mut)}
+.lined::placeholder{color:var(--soft)}
+.pe .lined{white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px}
+.jsv{font-size:12px;color:var(--mut);margin-top:8px;text-align:right}
+.tr{display:grid;grid-template-columns:90px minmax(0,1fr) 48px;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.tr b{display:block}.tr small{display:block;color:var(--mut);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr>span{text-align:right;font-weight:800}
+.track{height:10px;background:var(--line)}.track i{display:block;height:100%;background:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:2px solid var(--ink);margin-top:14px}
+.kpi{padding:16px 0;border-bottom:1px solid var(--line)}
+.kpi b{display:block;font-size:clamp(30px,8vw,44px);font-weight:300;letter-spacing:-.04em;line-height:1;white-space:nowrap}
+.kpi span{font-size:13px;color:var(--mut)}
+.rmm{display:block;font-size:13px;color:var(--mut);font-weight:400;margin-top:3px}
+.rml{display:flex;align-items:center;flex:none;font:600 13px "Inter Tight",system-ui,sans-serif;color:var(--ink);border:1.5px solid var(--ink);padding:0 12px;min-height:36px;text-decoration:none}
+.rmb{height:4px;background:var(--line)}.rmb i{display:block;height:100%;background:var(--ink)}
+.pie{display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin-top:14px}.pie svg{width:170px;height:170px;flex:none}
+.pl{flex:1;min-width:190px}.pl div{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.pl i{display:inline-block;width:12px;height:12px;margin-right:8px;vertical-align:-1px;border:1px solid var(--ink)}.pl span{color:var(--mut);white-space:nowrap}
+.capc{margin-top:14px;border:2px solid var(--ink);padding:18px 18px 16px}
+.capc small{display:block;font-size:14px;font-weight:600;color:var(--mut)}
+.capc b{display:block;font-size:clamp(52px,15vw,88px);font-weight:300;letter-spacing:-.05em;line-height:1;margin:8px 0 10px;white-space:nowrap}
+.capc span{font-size:14px;color:var(--mut)}
+.kpis.k2{border-top:0}.kpis.k2 .kpi b{font-size:clamp(24px,6vw,32px)}
+.lr{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);min-height:56px}
+.lr b{font-weight:800;font-size:18px}.lr small{display:block;color:var(--mut);font-size:13px;font-weight:400}
+.lr .split{color:var(--mut);font-size:13px;text-align:right;margin-left:auto}
+.fig{position:relative;height:240px;margin-top:14px}.fig>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.lgd{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--mut);margin-top:10px}
+.lgd i{display:inline-block;width:22px;vertical-align:middle;margin-right:6px;border-top:3px solid var(--ink)}
+.lgd .b{border-top:2px solid var(--soft)}.lgd .c2{border-top:2px dashed var(--ink)}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:15px}
+th{text-align:right;font-size:13px;color:var(--mut);font-weight:600;padding:8px 6px;border-bottom:1.5px solid var(--ink)}
+td{text-align:right;padding:10px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+.idea{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}
+.idea div{flex:1}.idea p{margin:0;font-weight:600;white-space:pre-wrap;overflow-wrap:anywhere}.idea small{display:block;color:var(--mut);font-size:13px;margin-top:4px}
+.idea.dn p{text-decoration:line-through;color:var(--mut)}
+.votes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}.vt{min-height:32px;padding:0 10px;font:inherit;font-size:12px;font-weight:600;border:1px solid var(--line);background:transparent;color:var(--mut);cursor:pointer}.vt:disabled{cursor:default}.vt.vy{background:var(--ink);color:var(--bg);border-color:var(--ink)}.vt.vn{border-color:var(--ink);color:var(--ink);text-decoration:line-through}.vs{font-size:12px;color:var(--mut);margin-left:4px}
+.stb{min-height:36px;font-size:13px;padding:0 12px;flex:none;white-space:nowrap}.stb.s1,.stb.s2{background:var(--ink);color:var(--bg)}.stb.s3{border-color:var(--soft);color:var(--mut)}
+@media(max-width:480px){.cg{gap:3px}.tr{grid-template-columns:70px minmax(0,1fr) 44px}}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;color:var(--mut)}.stack td:empty{display:none}}
+@media (prefers-reduced-motion:no-preference){.track i{transition:width .5s ease-out}}
+
+#gate{position:fixed;inset:0;z-index:70;background:var(--bg);display:grid;place-items:center;padding:24px}
+#gate[hidden]{display:none}
+#gate form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
+#gate img{width:180px;height:auto;margin:0 auto 8px;display:block;border-radius:4px}
+#gate h1{margin:0;font-size:34px;font-weight:800;letter-spacing:-.03em;text-align:center}
+#gate .hint{text-align:center;margin:0}
+#gate label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--mut)}
+#gate input{font:inherit;font-size:16px;padding:12px 14px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:0}
+#gate button{font:inherit;font-weight:800;min-height:48px;background:var(--ink);color:var(--bg);border:0;cursor:pointer}
+#gate-msg{min-height:1.2em;margin:0;font-size:14px;color:var(--mut);text-align:center}
+#gate a,.topbar a{color:var(--mut);text-decoration:none;font-size:14px;text-align:center}
+.topbar{display:none;justify-content:space-between;align-items:center;max-width:620px;margin:0 auto;padding:10px 20px 0}
+body.authed .topbar{display:flex}
+.topbar button{font:inherit;font-size:14px;background:none;border:1px solid var(--line);color:var(--ink);padding:6px 12px;cursor:pointer}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body data-tab="overall">
+<div id="gate" hidden>
+  <form id="gate-form" autocomplete="on">
+    <img src="/assets/logo.jpg" alt="Capital Malaya" width="904" height="400">
+    <h1>HQ Portal</h1>
+    <p class="hint">Founders only.</p>
+    <label>Email<input name="email" type="email" required autocomplete="username"></label>
+    <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
+    <button type="submit">Sign in</button>
+    <p id="gate-msg" role="status"></p>
+    <a href="/">← capitalmalaya.com</a>
+  </form>
+</div>
+<div class="topbar"><a href="/">← capitalmalaya.com</a><button type="button" id="signout">Sign out</button></div>
+<header class="brand"><img src="/assets/logo.jpg" alt="Capital Malaya" width="904" height="400"><button type="button" class="bell" id="bell" aria-label="Notifications" aria-expanded="false" aria-controls="np"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="badge" id="bdg" hidden></span></button></header>
+<div class="np" id="np" hidden></div>
+<nav class="tabs" aria-label="Sections">
+  <button type="button" data-tab="overall" class="on">Overall</button><button type="button" data-tab="biz">Business</button><button type="button" data-tab="trd">Trading &amp; Investment</button><button type="button" data-tab="founders">Founders</button><button type="button" data-tab="company">Company</button><button type="button" data-tab="insights">Insights</button><button type="button" data-tab="history">History</button>
+</nav>
+<nav class="subtabs" aria-label="Founders"><button type="button" data-tab="ceo">CEO</button><button type="button" data-tab="cfo">CFO</button><button type="button" data-tab="coo">COO</button></nav>
+<p class="conn" id="conn">Connecting to the team…</p>
+<main class="w">
+
+<section class="pane" id="p-ceo">
+  <div id="h-ceo"></div><div class="cal" id="c-ceo"></div>
+  <h2>Daily</h2><p class="hint">Resets every day. The team sees every tick.</p><div id="l-ceo"></div>
+  <h2>Today's update</h2><div class="pg"><div class="pd"><b id="ud-ceo"></b><span>visible to the team</span></div><textarea class="lined" id="u-ceo" aria-label="CEO update for today"></textarea></div><div class="jsv" id="us-ceo"></div>
+  <h2>Past updates</h2><div id="pu-ceo"></div>
+</section>
+
+<section class="pane" id="p-cfo">
+  <div id="h-cfo"></div><div class="cal" id="c-cfo"></div>
+  <h2>Daily</h2><p class="hint">Resets every day. The team sees every tick.</p><div id="l-cfo"></div>
+  <h2>Today's update</h2><div class="pg"><div class="pd"><b id="ud-cfo"></b><span>visible to the team</span></div><textarea class="lined" id="u-cfo" aria-label="CFO update for today"></textarea></div><div class="jsv" id="us-cfo"></div>
+  <h2>Past updates</h2><div id="pu-cfo"></div>
+</section>
+
+<section class="pane" id="p-coo">
+  <div id="h-coo"></div><div class="cal" id="c-coo"></div>
+  <h2>Daily</h2><p class="hint">Resets every day. The team sees every tick.</p><div id="l-coo"></div>
+  <h2>Today's update</h2><div class="pg"><div class="pd"><b id="ud-coo"></b><span>visible to the team</span></div><textarea class="lined" id="u-coo" aria-label="COO update for today"></textarea></div><div class="jsv" id="us-coo"></div>
+  <h2>Past updates</h2><div id="pu-coo"></div>
+</section>
+
+<section class="pane" id="p-insights">
+  <h1>Insights.</h1>
+  <p class="sub">How the founding team is performing, in numbers.</p>
+  <div class="kpis" id="ik"></div>
+  <h2>Last 30 days <span>daily completion</span></h2>
+  <div class="fig"><svg id="ich" role="img" aria-label="Daily completion per officer over the last 30 days"></svg></div>
+  <div class="lgd"><span><i style="border-top-color:#dc2626"></i>CEO</span><span><i style="border-top:3px solid #16a34a"></i>CFO</span><span><i style="border-top:3px solid #2563eb"></i>COO</span></div>
+  <h2>Company capital <span id="icap"></span></h2>
+  <div class="fig"><svg id="ccap" role="img" aria-label="Company capital over time"></svg></div>
+  <div class="lgd"><span><i></i>Capital (Business income + 60% of trading payouts, minus spending)</span></div>
+  <h2>Where the money goes <span id="ispt"></span></h2>
+  <div class="pie" id="ipie"></div>
+  <h2>Leaderboard <span>7-day average</span></h2>
+  <div id="ilb"></div>
+  <h2>By officer</h2>
+  <div id="itb"></div>
+</section>
+
+<section class="pane" id="p-history"><h1>History.</h1><p class="sub">Every update, idea and payout, day by day. Locked once the day ends: nothing here can be edited or deleted.</p><div id="hs"></div></section>
+
+<section class="pane" id="p-biz"><div id="sx-biz"></div></section>
+<section class="pane" id="p-trd"><div id="sx-trd"></div></section>
+<section class="pane" id="p-company"><div id="cx"></div></section>
+<section class="pane" id="p-overall"><div id="ov"></div></section>
+
+</main>
+<footer class="legal">© 2026 Capital Malaya. All rights reserved.<br>For internal use by the founding team only.</footer>
+<script>
+{
+const R=[{k:"ceo",t:"CEO",n:"Chief Executive Officer",d:"Decisions, overall strategy and the Trading section."},{k:"cfo",t:"CFO",n:"Chief Financial Officer",d:"Company fund, records and P&L for both sections."},{k:"coo",t:"COO",n:"Chief Operating Officer",d:"Daily operations and the Business section."}];
+const RMS={
+ceo:[{m:"Leadership",l:["What a CEO actually does: vision, people, capital","Writing a clear vision and mission for Capital Malaya","Setting goals: OKRs explained","Making decisions: reversible vs irreversible","Prioritising: the Eisenhower matrix and saying no","Running a good meeting: agenda, owners, deadlines","Giving and receiving feedback","Delegation: what to keep and what to hand off"]},
+ {m:"Self-leadership",l:["Leading yourself before leading others","Time management for a student CEO","Deep work: focus without the phone","Energy: sleep, exercise and food for performance","Building habits that stick","Handling stress and pressure","Learning how to learn faster"]},
+ {m:"Critical thinking",l:["What critical thinking is and why leaders need it","Separating facts from opinions","Spotting bias in yourself: confirmation, sunk cost, overconfidence","Asking better questions","First-principles thinking","Arguing the other side: steelmanning","Logical fallacies to watch for in meetings"]},
+ {m:"Decision making",l:["Decisions under uncertainty: thinking in probabilities","Expected value for business decisions","Pre-mortems: imagine it failed, then ask why","Decision journals: record why you decided","Fast vs slow decisions: when to move, when to wait","Group decisions: the 2/3 founders' vote done well","Learning from a bad outcome vs a bad decision"]},
+ {m:"Communication",l:["Writing clearly: short, simple, direct","Active listening","Public speaking basics","Storytelling for leaders","Presenting numbers and results","Negotiation basics: interests, options, walk-away point","Running difficult meetings calmly"]},
+ {m:"Strategy",l:["Business models: how financial firms make money","Competitive advantage: what makes a firm hard to copy","A SWOT analysis of Capital Malaya","Know your market: who your customers and investors are","Unit economics basics","Scenario planning: best, base and worst case"]},
+ {m:"Execution",l:["Turning strategy into a weekly plan","Reviewing OKRs every month","The CEO dashboard: the few numbers that matter","Saying no and killing projects that don't work","Holding people to deadlines","Quarterly planning with the founders"]},
+ {m:"Building a company in Malaysia",l:["Business structures in Malaysia: enterprise, partnership, Sdn Bhd","Registering a Sdn Bhd with SSM, step by step","Directors' duties under the Companies Act 2016","Shareholders' agreements: equity, vesting, exits","The company secretary and yearly compliance","Licensing: when you need the Securities Commission","Tax basics for a Sdn Bhd with LHDN","Islamic finance and Shariah compliance in Malaysia"]},
+ {m:"Shareholders and governance",l:["What a shareholder is and what shares mean","Ownership, voting and dividends in a Sdn Bhd","The board of directors vs management","Founders' agreement: roles, equity, vesting, exits","Dilution: what happens when new investors join","Reporting to shareholders: honest updates","Governance: conflicts of interest and fair decisions","Duties to minority shareholders"]},
+ {m:"Money and fundraising",l:["Reading a P&L, balance sheet and cash flow as a CEO","Budgeting and runway","How firms raise capital: bootstrapping, angels, VCs, LPs","Writing a one-page pitch","Valuation basics"]},
+ {m:"People and culture",l:["Hiring your first team members","Building culture and company values","Founder conflict and how to resolve it","Leading a part-time or remote team"]},
+ {m:"Risk and ethics",l:["Company risk: what can sink a small firm","A simple risk register","Ethics and integrity in finance","Protecting the company's reputation","Anti-money laundering (AML) basics for financial firms","Building a culture of honesty and compliance"]},
+ {m:"Leadership in depth",l:["Leadership styles and when to use each","Leading by example: discipline and standards","Accountability without blame","Motivating a small team with no salary yet","Hard conversations: telling a co-founder the truth","Leading through a crisis or a big loss","Developing future leaders"]},
+ {m:"Brand and growth",l:["Brand: logo, identity and voice","Building trust and a public track record","Networking and partnerships","The CEO's personal brand on LinkedIn","Review: write Capital Malaya's 3-year vision on one page"]}],
+cfo:[{m:"Accounting basics",l:["What a CFO does in a small firm","Assets, liabilities and equity","Double-entry bookkeeping","The income statement (P&L)","The balance sheet","The cash flow statement","Accrual vs cash accounting","Setting up simple bookkeeping in a spreadsheet"]},
+ {m:"Spreadsheets and modelling",l:["Spreadsheet essentials for finance","Key formulas: SUMIFS, XLOOKUP, IF","Pivot tables for summaries","Building a simple monthly P&L model","Scenario modelling: best, base, worst","A finance dashboard the founders can read"]},
+ {m:"Managing company money",l:["Tracking expenses by category","Budgeting and forecasting","Cash flow management and runway","Spending rules: who approves what, and how much","Business bank accounts: never mix personal money","Receipts, invoices and record keeping","USD payouts and converting to MYR","Paying founders: salary vs dividends"]},
+ {m:"Finance for the two sections",l:["Section P&L: Business vs Trading & Investment","Tracking prop firm fees, resets and payouts","Trading P&L per founder and the 60/40 split","E-commerce accounting: cost of goods sold","Platform, ads and payment gateway fees","Gross vs net margin per project","Sharing common costs fairly between sections"]},
+ {m:"Treasury and cash",l:["What treasury means in a small company","Holding USD and MYR: conversion costs","Safe ways to receive USD payouts in Malaysia","A cash reserve policy: how much to keep","Where to park company cash: savings, FD, money market","Payment approvals: two founders sign off"]},
+ {m:"Malaysian compliance",l:["Personal income tax basics with LHDN","Corporate tax for a Sdn Bhd","SST basics","Audit requirements for Malaysian companies","EPF, SOCSO and EIS when you hire","Financial reporting to SSM"]},
+ {m:"Investing and capital",l:["Time value of money","Compound growth","Risk and return","Diversification and asset allocation","Reading a company's financial statements","Financial ratios: margins, ROE, liquidity","Valuation basics: DCF in plain words","How an investment firm reports performance: NAV and returns"]},
+ {m:"Controls and reporting",l:["Internal controls: who can move money","Fraud prevention for small firms","Financial risk management basics","Islamic finance principles: riba, gharar, Shariah screening","Writing a monthly finance report for the team","Review: write Capital Malaya's first monthly finance report"]},
+ {m:"Fund management basics",l:["What an investment fund is","NAV and units explained","Management and performance fees","Measuring performance: returns, drawdown, Sharpe ratio","Writing an investment policy","Reporting to investors honestly"]}],
+coo:[{m:"Operations basics",l:["What a COO does","Mapping how the company works today","Writing an SOP (standard operating procedure)","Process design: inputs, steps, outputs","Checklists: why professionals use them","Project management basics: scope, time, owners","Kanban boards and task tracking","Running a weekly operations review"]},
+ {m:"Self-management",l:["Managing your own week as an operator","Time blocking and priorities","Focus: one task at a time","The weekly review habit","Staying calm when many things break at once"]},
+ {m:"Tools and systems",l:["Choosing the team's tools: chat, docs, tasks, storage","Document management and naming rules","Automating repetitive work","Data security and password management","Backups and business continuity"]},
+ {m:"Documentation",l:["Why documentation matters in a company","Writing clear documents: purpose, owner, date","Meeting minutes and action items","Templates: SOPs, reports, checklists","Version control: keeping the latest copy","Filing company records: what to keep and for how long","Writing the company's internal wiki"]},
+ {m:"Business operations",l:["Running an online business day to day","Order fulfilment: from order to delivery","Returns, refunds and complaints","Inventory basics, even with no own stock","Choosing and managing suppliers","Customer support: response times and scripts","Quality control: checking before it reaches the customer"]},
+ {m:"Automation and AI ops",l:["Finding repeatable tasks worth automating","No-code automation: Zapier and Make","AI assistants for daily operations","Automating reports and reminders","Automation risks: what to keep human"]},
+ {m:"Measuring and improving",l:["KPIs: choosing what to measure","Dashboards and reporting","Continuous improvement: kaizen and PDCA","Root cause analysis: the 5 whys","Risk management in operations"]},
+ {m:"Data and analytics",l:["Spreadsheets for operations","Cleaning and organising data","Reading a dashboard: what's normal, what's not","A/B testing basics","Writing a weekly operations report with numbers"]},
+ {m:"People and rhythm",l:["Onboarding a new team member","Roles and responsibilities: the RACI chart","Communication rhythms: daily, weekly, monthly","Managing your time and energy as an operator","Handling conflict inside the team"]},
+ {m:"Company setup",l:["Setting up the workspace: office or remote","Vendors and contract basics","Negotiation basics","Legal basics: contracts, NDAs, terms","The compliance calendar: deadlines the company must hit","PDPA: Malaysia's personal data protection law"]},
+ {m:"Legal basics in Malaysia",l:["How Malaysian law works: Acts, regulations, courts","The Companies Act 2016 in plain words","The Contracts Act 1950: what makes a contract valid","Consumer Protection Act and e-commerce rules","PDPA 2010: handling customer data","Intellectual property: trademarks and copyright","Employment Act basics: hiring legally","Licences and permits for an online business"]},
+ {m:"Contracts and compliance",l:["Reading a contract: key clauses to check","Writing a simple service or supplier agreement","NDAs: when and how to use them","Terms and conditions and privacy policy for a website","SSM annual returns and deadlines","LHDN and SST: compliance basics","Building a compliance checklist for Capital Malaya","When to hire a lawyer or company secretary"]},
+ {m:"Cybersecurity and IT",l:["Passwords, password managers and 2FA","Phishing and scams: how to spot them","Who can access which company accounts","Securing laptops and phones","What to do when an account is hacked"]},
+ {m:"Scaling",l:["Scaling operations from 3 to 10 people","Customer and investor service basics","Building a company handbook","A crisis management plan","Measuring team performance fairly","Review: write the Capital Malaya operations handbook v1"]}],
+trade:[{m:"How markets work",l:["What the stock market is and why prices move","What futures are, in plain words","The Nasdaq-100 and NQ/MNQ: what we trade","Bid, ask, spread and order types","Market sessions in Malaysia time: Asia, London, New York"]},
+ {m:"Reading a chart",l:["Reading a candlestick chart","Timeframes: daily, hourly, 5-minute","Support and resistance","Trends: higher highs and lower lows","Volume: what it tells you","VWAP basics"]},
+ {m:"News and the economy",l:["News that moves the market: CPI, NFP, FOMC","Reading the economic calendar"]},
+ {m:"Prop firms and risk",l:["What a prop firm is and how Topstep works","Topstep rules: daily loss, trailing drawdown, consistency","Risk per trade and stop losses","Risk-to-reward ratio","Position size for MNQ"]},
+ {m:"Trading the plan",l:["Writing a simple trading plan","Journaling a trade properly","Practising on the simulator","Learn the team's setup from the CEO and mark 5 examples","Backtest 20 trades of the setup by hand","A pre-market routine"]},
+ {m:"Mindset and review",l:["Trading psychology: fear and greed","Overtrading and revenge trading","Win rate vs expectancy","Reviewing a week of trades","Review: take 10 sim trades by the plan and journal them"]}],
+econ:[{m:"Economics basics",l:["What economics is: scarcity and choices","Supply and demand","Inflation: why prices rise","Interest rates and why they matter","GDP: measuring an economy","Unemployment and the job market"]},
+ {m:"Money and central banks",l:["What money is and how banks create it","The US Federal Reserve and FOMC","Bank Negara Malaysia and the OPR","Monetary vs fiscal policy","Bonds and yields in plain words"]},
+ {m:"Malaysia's economy",l:["How Malaysia's economy makes money: exports, oil, palm oil, chips","The ringgit: what moves MYR against USD","Bursa Malaysia: our stock market","Budget Malaysia: how the government spends"]},
+ {m:"The global picture",l:["The US dollar's role in the world","Trade, tariffs and supply chains","The business cycle: boom, slowdown, recession, recovery","Recessions: signs and history","China, the US and what it means for Asia"]},
+ {m:"Economy and markets",l:["How CPI, NFP and GDP move stocks and futures","Risk-on vs risk-off","Reading an economic calendar like a pro","Review: write a one-page view of the economy this month"]}],
+biz:[{m:"Business foundations",l:["What a business is: value, customers, profit","Business models that need no own product","Dropshipping: how it works, pros and cons","Digital products and services","Affiliate marketing and content businesses","Choosing a model that fits a small team"]},
+ {m:"Ideas and validation",l:["Finding a real problem people pay for","Know your customer: a simple persona","Checking demand before spending money","Looking at competitors","A one-page business plan (Lean Canvas)"]},
+ {m:"Building it online",l:["Setting up a simple online store","Landing pages that sell","Payments in Malaysia: FPX, e-wallets, cards","Suppliers and fulfilment","Customer service basics"]},
+ {m:"Marketing and sales",l:["Branding a small business","Content marketing on TikTok and Instagram","Paid ads basics: Meta and TikTok","Copywriting: words that sell","Email and WhatsApp marketing"]},
+ {m:"AI and automation",l:["Using AI to run a business with fewer people","Automating content and video","Automating orders, emails and reports","Choosing tools without overspending"]},
+ {m:"Numbers and growth",l:["Unit economics: price, cost, margin","CAC and LTV in plain words","Tracking sales and profit weekly","When to scale and when to stop","Review: pitch one business idea to the founders"]}],
+fin:[{m:"Money basics",l:["Income, expenses and saving","Budgeting that actually works","Compound growth","Inflation and your money","Debt: good debt vs bad debt"]},
+ {m:"Reading the numbers",l:["The income statement (P&L) in plain words","Cash flow: why profit is not cash","The balance sheet in plain words","Margins and profitability"]},
+ {m:"Investing basics",l:["Risk and return","Stocks, bonds and ETFs","Unit trusts, ASB and EPF in Malaysia","Diversification","Long-term investing vs trading"]},
+ {m:"Islamic finance",l:["Riba, gharar and maysir","Shariah-compliant investing and screening","Islamic banking products in Malaysia"]},
+ {m:"Company money",l:["How company money differs from personal money","Reading the CFO's monthly report","Review: build your own monthly budget and share one insight"]}]};
+const RML={};Object.keys(RMS).forEach(k=>{RML[k]=RMS[k].flatMap(x=>x.l.map(t=>({m:x.m,t})))});
+/* one topic a day: each founder's roadmaps woven together, module by module, beginner to advanced */
+const RMN={ceo:"CEO",cfo:"CFO",coo:"COO",trade:"Trading",biz:"Business",econ:"Economics",fin:"Finance"};
+const COMBO={ceoall:["ceo","trade","biz","econ","fin"],cfoall:["cfo","trade","econ","biz"],cooall:["coo","trade","biz","econ","fin"]};
+Object.keys(COMBO).forEach(k=>{const src=COMBO[k],mx=Math.max(...src.map(x=>RMS[x].length)),out=[];
+  for(let mi=0;mi<mx;mi++){const Ms=src.map(x=>({x,M:RMS[x][mi]})).filter(o=>o.M),ln=Math.max(...Ms.map(o=>o.M.l.length));for(let j=0;j<ln;j++)Ms.forEach(o=>{const t=o.M.l[j];if(t)out.push({m:RMN[o.x]+" · "+o.M.m,t})})}RML[k]=out});
+function rmItem(k,s,i,ed){if(ed)return `<div class="it"><span class="t" style="flex:1;padding:12px 0">${esc(i.t)} (moves on by itself)</span><button class="del" type="button" data-deli="${k}|${s.id}|${i.id}" aria-label="Remove roadmap">×</button></div>`;
+  const r=role(k),A=RML[i.rm]||[],key=today+":"+i.id,n=Object.keys(r.checks).filter(x=>{const p=x.split(":");return p[1]===i.id&&p[0]<today}).length,L=A[n];
+  return `<div class="it"><label><input type="checkbox" data-ck="${k}|${i.id}" ${r.checks[key]?"checked":""} ${mine(k)?"":"disabled"}><span class="t">${esc(L?L.t:"Roadmap complete. Well done.")}<span class="rmm">${esc(i.t)} · ${L?esc(L.m)+" · lesson "+(n+1)+"/"+A.length+" · max 30 min":"all "+A.length+" lessons done"}</span></span></label>${L?`<a class="rml" href="https://www.youtube.com/results?search_query=${encodeURIComponent(L.t.split(":")[0]+" explained")}" target="_blank" rel="noopener">Find</a>`:""}</div><div class="rmb"><i style="width:${Math.min(100,n/(A.length||1)*100)}%"></i></div>`}
+const RC={ceo:"#dc2626",cfo:"#16a34a",coo:"#2563eb"};
+const TABS=["ceo","cfo","coo","biz","trd","company","insights","overall","history"];let lastF="ceo";
+const pad=n=>String(n).padStart(2,"0"),ymd=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+let today=ymd(new Date()),wk="";
+const setWk=()=>{const d=new Date(today+"T00:00");d.setDate(d.getDate()-d.getDay());wk="w"+ymd(d)};setWk();
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const longDate=k=>new Date(k+"T00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+const money=v=>((Number(v)||0)<0?"-":"")+"$"+Math.abs(Number(v)||0).toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:2});
+const back=i=>{const d=new Date(today+"T00:00");d.setDate(d.getDate()-i);return ymd(d)};
+const D={ceo:null,cfo:null,coo:null,co:null,up:null,nt:null};
+const nts=()=>{const n=D.nt=D.nt||{};n.items=n.items||[];if(n.meet===undefined)n.meet=null;return n};
+const ups=()=>{const u=D.up=D.up||{};u.items=u.items||[];return u};
+let assets=null;let db=null,user=null,me=null,owner=false;const names={},edit={},calM={ceo:0,cfo:0,coo:0};
+const msg=t=>{document.getElementById("conn").textContent=t};
+const role=k=>{const r=D[k]=D[k]||{};r.secs=r.secs||[];r.checks=r.checks||{};r.scores=r.scores||{};r.notes=r.notes||{};if(r.uid===undefined)r.uid=null;return r};
+const co=()=>{const c=D.co=D.co||{};c.payouts=c.payouts||[];c.miles=c.miles||[];c.weekly=c.weekly||[];c.ideas=c.ideas||[];c.wchecks=c.wchecks||{};c.spend=c.spend||[];c.binc=c.binc||[];c.proj=c.proj||[];c.assets=c.assets||[];c.liabs=c.liabs||[];c.achv=c.achv||[];c.docs=c.docs||[];c.start=c.start||today;return c};
+const mine=k=>!!(me&&D[k]&&D[k].uid===me);
+const canEdit=k=>!!db&&(mine(k)||(owner&&!(D[k]&&D[k].uid)));
+const nm=id=>names[id]||"Someone";
+const dispName=k=>{const r=D[k]||{};return r.name||(r.uid?nm(r.uid):"")};
+const daysRun=()=>Math.max(1,Math.floor((new Date(today+"T00:00")-new Date(co().start+"T00:00"))/864e5)+1);
+const busyIn=el=>{const a=document.activeElement;return !!a&&el.contains(a)&&((a.tagName==="INPUT"&&a.type!=="checkbox")||a.tagName==="SELECT")};
+
+/* ---- saving: one write at a time per doc ---- */
+const pend={},busy={},tmr={};
+function put(path,obj){if(!db){msg("Not connected, so this change isn't saved.");return}pend[path]=obj;clearTimeout(tmr[path]);tmr[path]=setTimeout(()=>flush(path),450)}
+async function flush(path){if(busy[path]||!pend[path])return;const o=JSON.parse(JSON.stringify(pend[path]));delete pend[path];busy[path]=1;
+  try{await db.doc(path).set(o);msg("✓ Live. Saved for the whole team.")}catch(e){msg("Couldn't save. Ask Aqid to give you edit access to this page.")}
+  busy[path]=0;if(pend[path])flush(path)}
+const saveRole=k=>put("roles/"+k,role(k)),saveCo=()=>put("company/main",co());
+
+function setScore(k){const r=role(k),it=r.secs.flatMap(s=>s.items),d=it.filter(i=>r.checks[today+":"+i.id]).length;if(it.length)r.scores[today]=d/it.length;else delete r.scores[today]}
+function stats(k){const r=role(k),n=daysRun(),sc=x=>r.scores[x]||0;
+  const avg=len=>{const L=Math.min(len,n);let s=0;for(let i=0;i<L;i++)s+=sc(back(i));return s/L};
+  let streak=0,i=sc(today)>=.8?0:1;while(i<n&&sc(back(i))>=.8){streak++;i++}
+  let best=0,run=0,wins=0;for(let j=n-1;j>=0;j--){if(sc(back(j))>=.8){run++;wins++;best=Math.max(best,run)}else run=0}
+  return{t:sc(today),a7:avg(7),a30:avg(30),streak,best,wins,n}}
+const pc=v=>Math.round(v*100)+"%";
+
+/* ---- officer pages ---- */
+function headHTML(k){const o=R.find(x=>x.k===k),r=role(k),s=stats(k),it=r.secs.flatMap(x=>x.items),done=it.filter(i=>r.checks[today+":"+i.id]).length;
+  const claimed=["ceo","cfo","coo"].some(x=>D[x]&&D[x].uid&&D[x].uid===me);
+  const nmH=dispName(k)?`<b>${esc(dispName(k))}</b>`:"";
+  const who=r.uid?`${nmH}<span>${mine(k)?"· this is you":"· claimed"}</span>${owner&&!mine(k)?`<button type="button" data-release="${k}">Release role</button>`:""}`:`${nmH}<span>${nmH?"· ":""}not claimed yet</span>${db&&me&&!claimed?`<button type="button" class="solid" data-claim="${k}">This is me</button>`:""}`;
+  return `<div class="top"><div><h1>${o.t}.</h1><p class="sub">${o.n}. ${o.d}</p></div>${canEdit(k)?`<button type="button" data-edit="${k}" class="${edit[k]?"solid":""}">${edit[k]?"Done":"Edit"}</button>`:""}</div>
+  <div class="who">${who}</div>
+  <div class="hero"><div class="big"><small>Today</small>${pc(s.t)}</div><div class="today"><b>${done}/${it.length}</b><span>${s.streak} day streak · 7-day ${pc(s.a7)}</span></div></div>`}
+function calHTML(k){const r=role(k),st=co().start,n0=new Date(),m=new Date(n0.getFullYear(),n0.getMonth()+calM[k],1),y=m.getFullYear(),mo=m.getMonth(),dim=new Date(y,mo+1,0).getDate(),lead=(m.getDay()+6)%7;
+  let h=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(x=>`<div class="wd">${x}</div>`).join("")+'<div class="c e"></div>'.repeat(lead),s=0,c=0;
+  for(let d=1;d<=dim;d++){const key=y+"-"+pad(mo+1)+"-"+pad(d),inR=key>=st&&key<=today,v=r.scores[key]||0;if(inR){s+=v;c++}
+    const up=v>=.5,x=Math.round(25+Math.abs(v-.5)/.5*75),col=up?"#16a34a":"#dc2626";
+    const bg=inR?` style="background:color-mix(in srgb,${col} ${x}%,var(--bg));${x<55?`color:${up?"#15803d":"#b91c1c"}`:""}"`:"";
+    h+=`<div class="c ${inR?"has"+(x>=55?" lt":""):""} ${key===today?"td":""}"${bg} title="${key}"><span class="n">${d}</span>${inR?`<span class="p">${Math.round(v*100)}%</span>`:""}</div>`}
+  return `<div class="ch"><div><b>${m.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</b><span>${c?"monthly average "+Math.round(s/c*100)+"%":"no data this month"}</span></div><div class="nav"><button type="button" data-cm="${k}|-1" aria-label="Previous month">‹</button><button type="button" data-cm="${k}|1" aria-label="Next month">›</button></div></div><div class="cg" aria-label="Daily completion calendar">${h}</div>`}
+function listHTML(k){const r=role(k),ed=edit[k]&&canEdit(k),can=mine(k);
+  const secs=r.secs.map(s=>{
+    const head=ed?`<div class="sh"><input class="txt hd" value="${esc(s.t)}" data-ren="${k}|${s.id}" aria-label="Section name"><button class="del" type="button" data-delsec="${k}|${s.id}" aria-label="Remove section">×</button></div>`
+      :`<div class="sh"><b>${esc(s.t)}</b><span>${s.items.filter(i=>r.checks[today+":"+i.id]).length}/${s.items.length}</span></div>`;
+    const items=s.items.map(i=>i.rm?rmItem(k,s,i,ed):ed?`<div class="it"><input class="txt" value="${esc(i.t)}" data-ren="${k}|${s.id}|${i.id}" aria-label="Edit task"><button class="del" type="button" data-deli="${k}|${s.id}|${i.id}" aria-label="Remove task">×</button></div>`
+      :`<div class="it"><label><input type="checkbox" data-ck="${k}|${i.id}" ${r.checks[today+":"+i.id]?"checked":""} ${can?"":"disabled"}><span class="t">${esc(i.t)}</span></label></div>`).join("")||(ed?"":`<div class="empty">Empty. Tap Edit to add tasks.</div>`);
+    return `<div class="sec">${head}${items}${ed?`<form class="add" data-additem="${k}|${s.id}"><input class="txt" placeholder="Add a task…" aria-label="New task"><button type="submit">Add</button></form>`:""}</div>`}).join("");
+  const note=!can&&!ed&&db?`<p class="hint" style="margin-top:12px">${r.uid?"Only "+esc(dispName(k)||"the role holder")+" can tick this list.":"Claim this role above to start ticking."}</p>`:"";
+  return (ed?`<div class="sec"><div class="sh"><b>Name shown for this role</b></div><div class="it"><input class="txt" value="${esc(r.name||"")}" data-rname="${k}" placeholder="Full name" aria-label="Name for this role"></div></div>`:"")+(secs||`<div class="empty">No checklist yet.</div>`)+note+(ed?`<div class="row" style="margin-top:20px"><button type="button" data-addsec="${k}">+ New section</button>${owner&&r.uid?`<button type="button" data-release="${k}">Release this role</button>`:""}</div>`:"")}
+function pastHTML(k){const n=role(k).notes,ks=Object.keys(n).filter(x=>x!==today&&String(n[x]).trim()).sort().reverse().slice(0,14);
+  return `<div class="row" style="margin:6px 0 10px"><button type="button" data-tab="history">See every day in History</button></div>`+(ks.length?ks.map(x=>`<div class="pg pe"><div class="pd"><b>${longDate(x)}</b></div><div class="lined">${esc(n[x])}</div></div>`).join(""):`<div class="empty">Past updates will collect here, newest first.</div>`)}
+function renderRole(k,soft){const p=document.getElementById("p-"+k);if(soft&&busyIn(p))return;
+  document.getElementById("h-"+k).innerHTML=headHTML(k);document.getElementById("c-"+k).innerHTML=calHTML(k);document.getElementById("l-"+k).innerHTML=listHTML(k);
+  const ta=document.getElementById("u-"+k);if(document.activeElement!==ta)ta.value=role(k).notes[today]||"";
+  ta.disabled=!mine(k);ta.placeholder=mine(k)?"What did you get done today? Any blockers? What's next?":"Only the person in this role writes here.";
+  document.getElementById("ud-"+k).textContent=longDate(today);document.getElementById("pu-"+k).innerHTML=pastHTML(k)}
+
+/* ---- money ---- */
+const CATS=["Prop firm fees","Tools & data","Business expenses","Investment","Other"];
+const spent=()=>co().spend.reduce((a,x)=>a+(+x.a||0),0);
+const sum=a=>a.reduce((t,x)=>t+(+x.a||0),0);
+const secOut=k=>sum(co().spend.filter(x=>(x.s||"hq")===k));
+const secIn=k=>k==="trd"?sum(co().payouts)*.6:sum(co().binc);
+const secCap=k=>secIn(k)-secOut(k);
+const capital=()=>secCap("biz")+secCap("trd")-secOut("hq");
+const PST=["Idea","Testing","Running","Stopped"];
+const ACATS=["Cash in bank","Prop firm account","Equipment","Investment","Other"],LCATS=["Money owed to a founder","Unpaid bill or subscription","Rent","Loan","Other"],DCATS=["Agreement","SOP","Meeting minutes","Receipt","Plan","Other"];
+const assetsT=()=>sum(co().assets),liabsT=()=>sum(co().liabs),netWorth=()=>capital()+assetsT()-liabsT();
+const SEC={biz:{t:"Business",h:"Business.",sub:"Long term · online, no-product business, easy to manage with AI",lead:"coo"},trd:{t:"Trading & Investment",h:"Trading & Investment.",sub:"Short term · prop firm accounts and investments",lead:"ceo"}};
+/* ---- overall ---- */
+const IST=["New","Agreed","In progress","Done"];
+const vYes=x=>Object.values(x.v||{}).filter(v=>v===1).length,vNo=x=>Object.values(x.v||{}).filter(v=>v===-1).length,vetoed=x=>vNo(x)>=2&&(x.s||0)===0;
+const voteHTML=x=>`<div class="votes" role="group" aria-label="Founders' vote">${R.map(r=>{const v=(x.v||{})[r.k]||0;return `<button type="button" class="vt v${v<0?"n":v>0?"y":"0"}" data-vote="${x.id}|${r.k}" ${db&&mine(r.k)?"":"disabled"} aria-label="${r.t} vote: ${v>0?"agree":v<0?"disagree":"not voted"}">${r.t} ${v>0?"✓":v<0?"✗":"·"}</button>`}).join("")}<span class="vs">${vetoed(x)?"Vetoed by 2 of 3":vYes(x)>=2?"Passed 2 of 3":"Needs 2 of 3"}</span></div>`;
+function renderOverall(soft){const p=document.getElementById("p-overall");if(soft&&busyIn(p))return;const c=co(),ed=edit.all;
+  const md=c.miles.filter(m=>m.done).length;
+  const miles=c.miles.map(m=>ed?`<div class="it"><input class="txt" value="${esc(m.t)}" data-renm="${m.id}" aria-label="Edit milestone"><button class="del" type="button" data-delmile="${m.id}" aria-label="Remove milestone">×</button></div>`
+    :`<div class="it"><label><input type="checkbox" data-mile="${m.id}" ${m.done?"checked":""} ${db?"":"disabled"}><span class="t">${esc(m.t)}</span></label></div>`).join("")||`<div class="empty">No milestones yet.</div>`;
+  const wd=c.weekly.filter(w=>c.wchecks[wk+":"+w.id]).length;
+  const weekly=c.weekly.map(w=>ed?`<div class="it"><input class="txt" value="${esc(w.t)}" data-renw="${w.id}" aria-label="Edit weekly task"><button class="del" type="button" data-delwk="${w.id}" aria-label="Remove weekly task">×</button></div>`
+    :`<div class="it"><label><input type="checkbox" data-wck="${w.id}" ${c.wchecks[wk+":"+w.id]?"checked":""} ${db?"":"disabled"}><span class="t">${esc(w.t)}</span></label></div>`).join("")||`<div class="empty">Nothing set for Sundays yet.</div>`;
+  document.getElementById("ov").innerHTML=`<div class="top"><div><h1>Overall.</h1><p class="sub">${today<co().start?`Founding day: ${longDate(co().start)} · in ${Math.round((new Date(co().start+"T00:00")-new Date(today+"T00:00"))/864e5)} day${Math.round((new Date(co().start+"T00:00")-new Date(today+"T00:00"))/864e5)===1?"":"s"}`:`Founded ${new Date(co().start+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})} · day ${daysRun()}`}</p>${meetSoon()?`<p class="nextm">Next meeting: ${esc(meetTxt(meetSoon()))}</p>`:""}${ups().items[0]?`<p class="hint" style="margin-top:6px">New: ${esc(ups().items[0].t)}</p>`:""}</div>${db?`<button type="button" data-edit="all" class="${ed?"solid":""}">${ed?"Done":"Edit"}</button>`:""}</div>
+  <div class="capc"><small>Company capital</small><b>${money(capital())}</b><span>Run by the CFO · fed by both sections${secOut("hq")?` · ${money(secOut("hq"))} HQ spending`:""}</span></div>
+  <div style="margin-top:8px">${["biz","trd"].map(k=>`<button type="button" class="secrow" data-tab="${k}"><b>${SEC[k].t}<small>Led by ${R.find(r=>r.k===SEC[k].lead).t}${dispName(SEC[k].lead)?" · "+esc(dispName(SEC[k].lead)):""} · ${c.proj.filter(x=>x.s===k&&x.st!==3).length} active project${c.proj.filter(x=>x.s===k&&x.st!==3).length===1?"":"s"}</small></b><span>${money(secCap(k))} →</span></button>`).join("")}</div>
+  <h2>Ideas &amp; proposals <span>${c.ideas.filter(x=>x.s<3&&!vetoed(x)).length} open</span></h2><p class="hint">What we want to do as a team. Each founder votes on their own role. 2 of 3 agree and it passes.</p>
+  ${db?`<form class="add" id="idf"><input class="txt" name="t" placeholder="Share an idea or proposal for the team…" aria-label="New idea" style="flex:1 1 100%"><select class="fld" name="w" aria-label="Proposed by">${R.map(x=>`<option value="${x.k}" ${mine(x.k)?"selected":""}>${x.t}${dispName(x.k)?" · "+esc(dispName(x.k)):""}</option>`).join("")}</select><button type="submit" class="solid">Share</button></form>`:""}
+  ${c.ideas.slice().sort((a,b)=>((a.s===3||vetoed(a))-(b.s===3||vetoed(b)))||(a.d<b.d?1:a.d>b.d?-1:0)).map(x=>{const o=R.find(r=>r.k===x.w)||{t:"Team",k:""};return `<div class="idea ${x.s===3||vetoed(x)?"dn":""}"><div><p>${esc(x.t)}</p><small>${o.t}${o.k&&dispName(o.k)?" · "+esc(dispName(o.k)):""} · ${new Date(x.d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</small>${voteHTML(x)}</div>${db?`<button type="button" class="stb s${x.s||0}" data-ist="${x.id}" aria-label="Change status">${IST[x.s||0]}</button>`:`<span class="hint">${IST[x.s||0]}</span>`}</div>`}).join("")||`<div class="empty">No ideas yet. Be the first to share one.</div>`}
+  <h2>Milestones <span>${md}/${c.miles.length}</span></h2><p class="hint">The road to a registered firm, across both sections.</p>${miles}
+  ${ed?`<form class="add" data-addto="miles"><input class="txt" placeholder="Add a milestone…" aria-label="New milestone"><button type="submit">Add</button></form>`:""}
+  <h2>Every Sunday <span>${wd}/${c.weekly.length}</span></h2><p class="hint">The founders' weekly check. Resets every Sunday.</p>${weekly}
+  ${ed?`<form class="add" data-addto="weekly"><input class="txt" placeholder="Add a weekly task…" aria-label="New weekly task"><button type="submit">Add</button></form>`:""}
+  <h2>What's new <span>${ups().items.length?"updated "+new Date(ups().items[0].d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):""}</span></h2><p class="hint">Changes to this HQ, posted by Aqid.</p>
+  ${owner&&db?`<form class="add" id="upf"><input class="txt" name="t" placeholder="Describe the update…" aria-label="New update"><button type="submit">Post update</button></form>`:""}
+  ${ups().items.slice(0,10).map(x=>`<div class="lr"><b style="font-weight:600;font-size:16px">${esc(x.t)}<small>${longDate(x.d)}</small></b>${owner&&ed?`<button class="del" type="button" data-delup="${x.id}" aria-label="Remove update">×</button>`:""}</div>`).join("")||`<div class="empty">No updates posted yet.</div>`}`}
+
+
+/* ---- photos ---- */
+const imgSrc=id=>/^https:\/\//.test(id)?id:"/_blob/"+encodeURIComponent(id);
+async function shrink(file){try{const bmp=await createImageBitmap(file),k=Math.min(1,1600/Math.max(bmp.width,bmp.height)),c=document.createElement("canvas");c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(b=>r(b||file),"image/jpeg",.85))}catch(e){return file}}
+async function uploadAll(files){const ids=[];for(const f of [...files].slice(0,8)){if(!f.type.startsWith("image/"))continue;try{const r=await assets.upload(await shrink(f));ids.push(r.id)}catch(e){msg("Couldn't upload a photo. Only founders with edit access can add photos.")}}return ids}
+/* ---- company: balance sheet, achievements, documents ---- */
+function renderCompany(soft){const p=document.getElementById("p-company");if(soft&&busyIn(p))return;const c=co(),ed=edit.company;
+  const fd=d=>new Date(d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+  const row=(x,kind)=>`<div class="lr"><b>${money(x.a)}<small>${esc(x.c)}${x.t?" · "+esc(x.t):""}</small></b>${ed?`<button class="del" type="button" data-del${kind}="${x.id}" aria-label="Remove">×</button>`:""}</div>`;
+  const safe=u=>/^https?:\/\//i.test(u||"")?u:"";
+  document.getElementById("cx").innerHTML=`<div class="top"><div><h1>Company.</h1><p class="sub">What Capital Malaya owns, owes and has achieved.</p></div>${db?`<button type="button" data-edit="company" class="${ed?"solid":""}">${ed?"Done":"Edit"}</button>`:""}</div>
+  <div class="capc"><small>Net worth</small><b>${money(netWorth())}</b><span>Everything the company is worth: capital ${money(capital())} + other assets ${money(assetsT())} − debts ${money(liabsT())}</span></div>
+  <div class="kpis k2"><div class="kpi"><b>${money(capital()+assetsT())}</b><span>Total assets</span></div><div class="kpi"><b>${money(liabsT())}</b><span>Total liabilities</span></div></div>
+  <h2>Assets <span>${money(capital()+assetsT())}</span></h2><p class="hint">What the company owns. Company capital is added automatically from both sections.</p>
+  <div class="lr"><b>${money(capital())}<small>Company capital · from Business and Trading &amp; Investment</small></b></div>
+  ${db?`<form class="add" id="asf"><select class="fld" name="c" aria-label="Asset type">${ACATS.map(x=>`<option>${esc(x)}</option>`).join("")}</select><input class="fld" type="number" name="a" min="0" step="0.01" inputmode="decimal" placeholder="Value in USD" aria-label="Value in USD" style="flex:1;min-width:130px"><input class="txt" name="t" placeholder="What is it? e.g. Lucid 50K Flex, MacBook" aria-label="Asset name" style="flex:1 1 100%"><button type="submit" class="solid">Add asset</button></form>`:""}
+  ${c.assets.map(x=>row(x,"as")).join("")}
+  <h2>Liabilities <span>${money(liabsT())}</span></h2><p class="hint">What the company owes. Clear these before splitting profit.</p>
+  ${db?`<form class="add" id="lif"><select class="fld" name="c" aria-label="Liability type">${LCATS.map(x=>`<option>${esc(x)}</option>`).join("")}</select><input class="fld" type="number" name="a" min="0" step="0.01" inputmode="decimal" placeholder="Amount in USD" aria-label="Amount in USD" style="flex:1;min-width:130px"><input class="txt" name="t" placeholder="Owed to whom, for what?" aria-label="Liability details" style="flex:1 1 100%"><button type="submit" class="solid">Add liability</button></form>`:""}
+  ${c.liabs.map(x=>row(x,"li")).join("")||`<div class="empty">No liabilities. Keep it that way.</div>`}
+  <h2>Achievements <span>${c.achv.length}</span></h2><p class="hint">Things Capital Malaya has done. The company's own history.</p>
+  ${db?`<form class="add" id="acf"><input class="fld" type="date" name="d" value="${today}" aria-label="Date"><input class="txt" name="t" placeholder="What did we achieve?" aria-label="Achievement" style="flex:1 1 100%">${assets?`<label class="pick">📷 Add photos<input type="file" name="f" accept="image/*" multiple hidden></label>`:""}<button type="submit" class="solid">Add achievement</button></form>`:""}
+  <div class="achv">${c.achv.slice().sort((a,b)=>a.d<b.d?1:-1).map(x=>`<div class="ac"><time>${fd(x.d)}</time><p>${esc(x.t)}</p>${ed?`<button class="del" type="button" data-delac="${x.id}" aria-label="Remove achievement">×</button>`:""}${(x.imgs||[]).length?`<div class="acg">${x.imgs.map(id=>`<figure><img src="${esc(imgSrc(id))}" alt="Photo: ${esc(x.t)}" loading="lazy" data-zoom="1">${ed?`<button class="del" type="button" data-delimg="${x.id}|${esc(id)}" aria-label="Remove photo">×</button>`:""}</figure>`).join("")}</div>`:""}${assets?`<label class="pick sm">📷 Add photo<input type="file" accept="image/*" multiple hidden data-acimg="${x.id}"></label>`:""}</div>`).join("")||`<div class="empty">No achievements yet.</div>`}</div>
+  <h2>Documents <span>${c.docs.length}</span></h2><p class="hint">A list of the company's documents. The files themselves are kept on the COO's SSD.</p>
+  ${db?`<form class="add" id="dcf"><select class="fld" name="c" aria-label="Document type">${DCATS.map(x=>`<option>${esc(x)}</option>`).join("")}</select><input class="txt" name="t" placeholder="Document name, e.g. Founders' agreement (signed)" aria-label="Document name" style="flex:1"><button type="submit" class="solid">Add</button></form>`:""}
+  ${DCATS.map(k=>{const L=c.docs.filter(x=>x.c===k);return L.length?`<p class="dcat">${esc(k)}</p>${L.map(x=>`<div class="lr dc">${safe(x.u)?`<a href="${esc(safe(x.u))}" target="_blank" rel="noopener">${esc(x.t)} ↗</a>`:`<b>${esc(x.t)}</b>`}<small>${fd(x.d)}</small>${ed?`<button class="del" type="button" data-deldc="${x.id}" aria-label="Remove document">×</button>`:""}</div>`).join("")}`:""}).join("")||`<div class="empty">No documents listed yet.</div>`}`}
+
+/* ---- sections: Business / Trading & Investment ---- */
+function renderSec(k,soft){const p=document.getElementById("p-"+k);if(soft&&busyIn(p))return;const c=co(),S=SEC[k],ed=edit[k],L=R.find(r=>r.k===S.lead);
+  const fd=d=>new Date(d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+  const proj=c.proj.filter(x=>x.s===k).sort((a,b)=>(a.st===3)-(b.st===3)||(a.d<b.d?1:-1));
+  const ins=k==="trd"?c.payouts.slice().sort((a,b)=>a.d<b.d?1:-1).map(x=>`<div class="lr"><b>${money(x.a)}<small>${fd(x.d)} · payout from ${esc((R.find(r=>r.k===x.w)||{t:"team"}).t)}</small></b><span class="split">${money(x.a*.6)} company<br>${money(x.a*.4)} founder</span>${ed?`<button class="del" type="button" data-delpay="${x.id}" aria-label="Remove payout">×</button>`:""}</div>`).join("")
+    :c.binc.slice().sort((a,b)=>a.d<b.d?1:-1).map(x=>`<div class="lr"><b>${money(x.a)}<small>${fd(x.d)}${x.n?" · "+esc(x.n):""}</small></b>${ed?`<button class="del" type="button" data-delbi="${x.id}" aria-label="Remove income">×</button>`:""}</div>`).join("");
+  const outs=c.spend.filter(x=>(x.s||"hq")===k).sort((a,b)=>a.d<b.d?1:-1).map(x=>`<div class="lr"><b>${money(x.a)}<small>${esc(x.c)}${x.n?" · "+esc(x.n):""} · ${fd(x.d)}</small></b>${ed?`<button class="del" type="button" data-delsp="${x.id}" aria-label="Remove spending">×</button>`:""}</div>`).join("");
+  document.getElementById("sx-"+k).innerHTML=`<div class="top"><div><h1>${S.h}</h1><p class="sub">${S.sub}</p><p class="lead">Led by <b>${L.t}${dispName(L.k)?" · "+esc(dispName(L.k)):""}</b> · fund and records by CFO</p></div>${db?`<button type="button" data-edit="${k}" class="${ed?"solid":""}">${ed?"Done":"Edit"}</button>`:""}</div>
+  <div class="capc"><small>${S.t} capital</small><b>${money(secCap(k))}</b><span>${k==="trd"?"60% of payouts":"Income"}, minus ${S.t} spending</span></div>
+  <div class="kpis k2"><div class="kpi"><b>${money(secIn(k))}</b><span>Money in${k==="trd"?" (company 60%)":""}</span></div><div class="kpi"><b>${money(secOut(k))}</b><span>Money out</span></div></div>
+  <h2>Projects <span>${proj.filter(x=>x.st!==3).length} active</span></h2><p class="hint">${k==="biz"?"Business ideas we're testing or running. Tap the status to move it on.":"Accounts, strategies and investments. Tap the status to move it on."}</p>
+  ${db?`<form class="add" data-proj="${k}"><input class="txt" name="t" placeholder="${k==="biz"?"Add a business project, e.g. dropshipping store…":"Add an account or investment, e.g. Lucid 50K Flex…"}" aria-label="New project" style="flex:1"><button type="submit" class="solid">Add</button></form>`:""}
+  ${proj.map(x=>`<div class="idea ${x.st===3?"dn":""}"><div>${ed?`<input class="txt" value="${esc(x.t)}" data-renp="${x.id}" aria-label="Edit project">`:`<p>${esc(x.t)}</p>`}<small>Added ${new Date(x.d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</small></div>${ed?`<button class="del" type="button" data-delpj="${x.id}" aria-label="Remove project">×</button>`:db?`<button type="button" class="stb s${x.st||0}" data-pst="${x.id}" aria-label="Change status">${PST[x.st||0]}</button>`:`<span class="hint">${PST[x.st||0]}</span>`}</div>`).join("")||`<div class="empty">No projects yet.</div>`}
+  <h2>Money in <span>${money(k==="trd"?sum(c.payouts):sum(c.binc))} total</span></h2><p class="hint">${k==="trd"?"Every payout. 60% goes to the company, 40% to the founder who traded it.":"Every ringgit or dollar the business earns. All of it goes to the company fund."}</p>
+  ${db?(k==="trd"?`<form class="add" id="payf"><input class="fld" type="date" name="d" value="${today}" aria-label="Payout date"><select class="fld" name="w" aria-label="Payout from"><option value="ceo">CEO</option><option value="coo">COO</option><option value="cfo">CFO</option></select><input class="fld" type="number" name="a" min="0" step="0.01" inputmode="decimal" placeholder="Amount in USD" aria-label="Amount in USD" style="flex:1;min-width:140px"><button type="submit" class="solid">Add payout</button></form>`
+    :`<form class="add" id="bif"><input class="fld" type="date" name="d" value="${today}" aria-label="Date"><input class="fld" type="number" name="a" min="0" step="0.01" inputmode="decimal" placeholder="Amount in USD" aria-label="Amount in USD" style="flex:1;min-width:140px"><input class="txt" name="n" placeholder="Where did it come from?" aria-label="Source" style="flex:1 1 100%"><button type="submit" class="solid">Add income</button></form>`):""}
+  ${ins||`<div class="empty">${k==="trd"?"No payouts yet. The first one is the target.":"No income yet."}</div>`}
+  <h2>Money out <span>${money(secOut(k))} total</span></h2><p class="hint">Everything this section spends or invests. Taken out of its capital.</p>
+  ${db?`<form class="add" data-spf="${k}"><input class="fld" type="date" name="d" value="${today}" aria-label="Date"><select class="fld" name="c" aria-label="Category">${CATS.map(x=>`<option>${esc(x)}</option>`).join("")}</select><input class="fld" type="number" name="a" min="0" step="0.01" inputmode="decimal" placeholder="Amount in USD" aria-label="Amount in USD" style="flex:1;min-width:130px"><input class="txt" name="n" placeholder="What was it for?" aria-label="What was it for" style="flex:1 1 100%"><button type="submit" class="solid">Add spending</button></form>`:""}
+  ${outs||`<div class="empty">No spending recorded yet.</div>`}`}
+
+/* ---- insights ---- */
+function renderInsights(){const S=R.map(x=>({...x,s:stats(x.k)})),c=co(),tot=c.payouts.reduce((a,x)=>a+(+x.a||0),0);
+  const t7=S.reduce((a,x)=>a+x.s.a7,0)/3,t30=S.reduce((a,x)=>a+x.s.a30,0)/3,top=S.slice().sort((a,b)=>b.s.streak-a.s.streak)[0];
+  document.getElementById("ik").innerHTML=[[pc(t7),"Team 7-day average"],[pc(t30),"Team 30-day average"],[top.s.streak?top.s.streak+" days":"–",top.s.streak?"Longest streak now · "+top.t:"Longest streak now"],[money(capital()),"Company capital"]].map(x=>`<div class="kpi"><b>${x[0]}</b><span>${esc(x[1])}</span></div>`).join("");
+  document.getElementById("ilb").innerHTML=S.slice().sort((a,b)=>b.s.a7-a.s.a7).map((x,i)=>`<div class="tr"><div><b>${i+1}. ${x.t}</b><small>${esc(dispName(x.k)||"unclaimed")}</small></div><div class="track"><i style="width:${Math.round(x.s.a7*100)}%"></i></div><span>${pc(x.s.a7)}</span></div>`).join("");
+  document.getElementById("itb").innerHTML=`<table class="stack"><thead><tr><th>Officer</th><th>Today</th><th>7 days</th><th>30 days</th><th>Streak</th><th>Best</th><th>Winning days</th></tr></thead><tbody>${S.map(x=>`<tr><td><b>${x.t}</b></td><td>${pc(x.s.t)}</td><td>${pc(x.s.a7)}</td><td>${pc(x.s.a30)}</td><td>${x.s.streak}</td><td>${x.s.best}</td><td>${x.s.wins}/${x.s.n}</td></tr>`).join("")}</tbody></table><p class="hint" style="margin-top:10px">A winning day is 80% or more of the daily list.</p>`;
+  drawChart();drawCap();drawPie()}
+
+function capSeries(){const c=co(),len=Math.max(2,Math.min(daysRun(),180)),keys=[];for(let i=len-1;i>=0;i--)keys.push(back(i));
+  const v=keys.map(k=>c.payouts.filter(p=>p.d<=k).reduce((a,p)=>a+(+p.a||0),0)*.6+c.binc.filter(p=>p.d<=k).reduce((a,p)=>a+(+p.a||0),0)-c.spend.filter(s=>s.d<=k).reduce((a,s)=>a+(+s.a||0),0));return{keys,v}}
+function drawCap(){const s=document.getElementById("ccap");if(!s)return;const W=s.clientWidth,H=s.clientHeight;if(!W||!H)return;
+  const {keys,v}=capSeries(),len=keys.length,mx=Math.max(100,...v),mn=Math.min(0,...v),L=W<420?46:56,Rr=10,T=10,B=24,iw=W-L-Rr,ih=H-T-B;
+  const X=i=>L+i/(len-1)*iw,Y=y=>T+ih-(y-mn)/(mx-mn)*ih,f=k=>new Date(k+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+  const short=n=>(n<0?"-":"")+(Math.abs(n)>=1000?"$"+(Math.abs(n)/1000).toFixed(n%1000?1:0)+"k":"$"+Math.round(Math.abs(n)));
+  let g=[mn,(mn+mx)/2,mx].map((y,i)=>`<line x1="${L}" x2="${W-Rr}" y1="${Y(y)}" y2="${Y(y)}" style="stroke:var(--line)" ${i?'stroke-dasharray="3 4"':""}/><text x="${L-8}" y="${Y(y)+4}" text-anchor="end" font-size="11" style="fill:var(--mut)">${short(y)}</text>`).join("");
+  if(mn<0)g+=`<line x1="${L}" x2="${W-Rr}" y1="${Y(0)}" y2="${Y(0)}" style="stroke:var(--soft)"/>`;
+  const d=v.map((y,i)=>(i?"H"+X(i).toFixed(1)+"V"+Y(y).toFixed(1):"M"+X(0).toFixed(1)+" "+Y(y).toFixed(1))).join("");
+  g+=`<path d="${d}V${Y(mn)}H${X(0)}Z" style="fill:var(--ink);opacity:.07"/><path d="${d}" fill="none" stroke-width="2.5" stroke-linejoin="round" style="stroke:var(--ink)"/><circle cx="${X(len-1)}" cy="${Y(v[len-1])}" r="4.5" style="fill:var(--ink)"/>`;
+  if(v.every(x=>x===0))g+=`<text x="${L+iw/2}" y="${T+ih/2}" text-anchor="middle" font-size="13" style="fill:var(--mut)">Grows with the first payout</text>`;
+  g+=`<text x="${L}" y="${H-4}" font-size="11" style="fill:var(--mut)">${f(keys[0])}</text><text x="${W-Rr}" y="${H-4}" text-anchor="end" font-size="11" style="fill:var(--mut)">Today</text>`;
+  s.innerHTML=g;document.getElementById("icap").textContent=money(v[len-1])+" now"}
+function drawPie(){const el=document.getElementById("ipie");if(!el)return;const c=co(),tot=spent(),sh=[100,72,50,32,16];
+  const per=CATS.map(k=>c.spend.filter(s=>s.c===k).reduce((a,s)=>a+(+s.a||0),0));
+  document.getElementById("ispt").textContent=tot?money(tot)+" spent":"";
+  if(!tot){el.innerHTML=`<div class="empty" style="flex:1">No spending yet. Add it in Business or Trading &amp; Investment and the pie fills in.</div>`;return}
+  let a0=-Math.PI/2,paths="";per.forEach((v,i)=>{if(!v)return;const a1=a0+v/tot*Math.PI*2,big=a1-a0>Math.PI?1:0,col=`color-mix(in srgb,var(--ink) ${sh[i]}%,var(--bg))`;
+    paths+=v===tot?`<circle cx="50" cy="50" r="46" style="fill:${col}"/>`:`<path d="M50 50L${50+46*Math.cos(a0)} ${50+46*Math.sin(a0)}A46 46 0 ${big} 1 ${50+46*Math.cos(a1)} ${50+46*Math.sin(a1)}Z" style="fill:${col};stroke:var(--bg);stroke-width:1"/>`;a0=a1});
+  el.innerHTML=`<svg viewBox="0 0 100 100" role="img" aria-label="Company spending by category">${paths}</svg><div class="pl">${CATS.map((k,i)=>per[i]?`<div><b><i style="background:color-mix(in srgb,var(--ink) ${sh[i]}%,var(--bg))"></i>${esc(k)}</b><span>${money(per[i])} · ${Math.round(per[i]/tot*100)}%</span></div>`:"").join("")}</div>`}
+const capRO=new ResizeObserver(drawCap);
+function drawChart(){const s=document.getElementById("ich"),W=s.clientWidth,H=s.clientHeight;if(!W||!H)return;
+  const len=Math.min(30,daysRun()),keys=[];for(let i=len-1;i>=0;i--)keys.push(back(i));
+  const L=W<420?32:40,Rr=10,T=10,B=24,iw=W-L-Rr,ih=H-T-B,X=i=>L+(len===1?iw/2:i/(len-1)*iw),Y=v=>T+ih-v*ih;
+  const f=k=>new Date(k+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+  let g=[0,.5,1].map(p=>`<line x1="${L}" x2="${W-Rr}" y1="${Y(p)}" y2="${Y(p)}" style="stroke:var(--line)" ${p?'stroke-dasharray="3 4"':""}/><text x="${L-8}" y="${Y(p)+4}" text-anchor="end" font-size="11" style="fill:var(--mut)">${p*100}%</text>`).join("");
+  const st={ceo:[RC.ceo,2.5,""],cfo:[RC.cfo,2.5,""],coo:[RC.coo,2.5,""]};
+  R.forEach(x=>{const r=role(x.k),v=keys.map(k=>r.scores[k]||0),[col,w,da]=st[x.k];
+    if(len>1)g+=`<path d="${v.map((p,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(p).toFixed(1)).join("")}" fill="none" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" ${da?`stroke-dasharray="${da}"`:""} style="stroke:${col}"/>`;
+    g+=`<circle cx="${X(len-1)}" cy="${Y(v[len-1])}" r="${w+1.5}" style="fill:${col}"/>`});
+  g+=`<text x="${L}" y="${H-4}" font-size="11" style="fill:var(--mut)">${f(keys[0])}</text><text x="${W-Rr}" y="${H-4}" text-anchor="end" font-size="11" style="fill:var(--mut)">Today</text>`;
+  s.innerHTML=g}
+const chartRO=new ResizeObserver(drawChart);chartRO.observe(document.getElementById("ich"));capRO.observe(document.getElementById("ccap"));
+
+
+/* ---- history ---- */
+let hDay=today,hEd={};
+function hDays(){const s=new Set();R.forEach(x=>{const r=role(x.k);Object.keys(r.notes).forEach(k=>{if(String(r.notes[k]).trim())s.add(k)});Object.keys(r.scores).forEach(k=>{if(r.scores[k]>0)s.add(k)})});
+  const c=co();c.ideas.forEach(i=>s.add(i.d));c.payouts.forEach(p=>s.add(p.d));c.spend.forEach(p=>s.add(p.d));c.miles.forEach(m=>{if(m.done)s.add(m.done)});return [...s].filter(k=>k<=today).sort().reverse()}
+function renderHistory(soft){const p=document.getElementById("p-history"),a=document.activeElement;if(soft&&(busyIn(p)||(a&&a.tagName==="TEXTAREA"&&p.contains(a))))return;
+  const c=co(),days=hDays(),sh=k=>new Date(k+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+  const team=R.map(x=>{const v=role(x.k).scores[hDay]||0;return `<div class="tr"><div><b>${x.t}</b><small>${esc(dispName(x.k)||"unclaimed")}</small></div><div class="track"><i style="width:${Math.round(v*100)}%"></i></div><span>${pc(v)}</span></div>`}).join("");
+  const ups=R.map(x=>{const r=role(x.k),txt=r.notes[hDay]||"",me_=mine(x.k);
+    const body=hEd[x.k]?`<textarea class="lined" id="he-${x.k}" aria-label="Edit ${x.t} update">${esc(txt)}</textarea><div class="row" style="margin-top:10px"><button type="button" class="solid" data-hsave="${x.k}">Save</button><button type="button" data-hcancel="${x.k}">Cancel</button></div>`
+      :(txt.trim()?`<div class="lined">${esc(txt)}</div>`:`<p class="hint" style="margin:10px 0 0">No update this day.</p>`);
+    return `<div class="pg pe"><div class="pd"><b>${x.t}${dispName(x.k)?" · "+esc(dispName(x.k)):""}</b></div>${body}</div>`}).join("");
+  const ids=c.ideas.filter(i=>i.d===hDay),pays=c.payouts.filter(x=>x.d===hDay),ms=c.miles.filter(m=>m.done===hDay),sps=c.spend.filter(x=>x.d===hDay);
+  document.getElementById("hs").innerHTML=`<div class="ch" style="margin-top:26px"><div><b>${longDate(hDay)}</b><span>${days.length} day${days.length===1?"":"s"} on record</span></div><div class="nav"><button type="button" data-hd="-1" aria-label="Previous day">‹</button><button type="button" data-hd="1" aria-label="Next day" ${hDay>=today?"disabled":""}>›</button></div></div>
+  <div class="hrow"><input class="fld" type="date" id="hdate" value="${hDay}" max="${today}" min="${c.start}" aria-label="Pick a day"><button type="button" data-hgo="${today}">Today</button></div>
+  ${days.length?`<div class="chips">${days.slice(0,21).map(k=>`<button type="button" class="${k===hDay?"on":""}" data-hgo="${k}">${sh(k)}</button>`).join("")}</div>`:""}
+  <h2>Team that day</h2>${team}
+  <h2>Updates</h2>${ups}
+  <h2>Ideas shared <span>${ids.length}</span></h2>${ids.map(i=>{const o=R.find(r=>r.k===i.w)||{t:"Team",k:""};return `<div class="idea ${i.s===3?"dn":""}"><div><p>${esc(i.t)}</p><small>${o.t}${o.k&&dispName(o.k)?" · "+esc(dispName(o.k)):""} · now: ${IST[i.s||0]}</small></div></div>`}).join("")||`<div class="empty">No ideas shared this day.</div>`}
+  ${pays.length?`<h2>Payouts</h2>${pays.map(x=>`<div class="lr"><b>${money(x.a)}<small>from ${esc((R.find(r=>r.k===x.w)||{t:"team"}).t)}</small></b><span class="split">${money(x.a*.6)} company</span></div>`).join("")}`:""}
+  ${sps.length?`<h2>Spending</h2>${sps.map(x=>`<div class="lr"><b>${money(x.a)}<small>${esc(x.c)}${x.n?" · "+esc(x.n):""}</small></b></div>`).join("")}`:""}
+  ${ms.length?`<h2>Milestones reached</h2>${ms.map(m=>`<div class="empty" style="color:var(--ink);font-weight:600">✓ ${esc(m.t)}</div>`).join("")}`:""}`}
+let npOpen=false;
+const seenGet=()=>{try{return +localStorage.getItem("cmhq-seen")||0}catch(e){return 0}},seenSet=v=>{try{localStorage.setItem("cmhq-seen",String(v))}catch(e){}};
+const myRole=()=>R.find(x=>mine(x.k));
+const meetTxt=m=>new Date(m.at).toLocaleString("en-GB",{weekday:"long",day:"numeric",month:"long",hour:"numeric",minute:"2-digit",hour12:true});
+const meetSoon=()=>{const m=nts().meet;return m&&new Date(m.at).getTime()>Date.now()-36e5?m:null};
+function renderBell(){const n=nts(),seen=seenGet(),un=n.items.filter(x=>x.ts>seen).length,b=document.getElementById("bdg");
+  b.hidden=!un;b.textContent=un>9?"9+":un;document.getElementById("bell").setAttribute("aria-expanded",npOpen);
+  const p=document.getElementById("np");p.hidden=!npOpen;if(!npOpen)return;if(busyIn(p))return;
+  const m=meetSoon();
+  p.innerHTML=`<div class="npi"><h2>Next meeting</h2><p class="hint" style="margin:-4px 0 12px">Set by the CEO. View only.</p>${m?`<div class="meet"><b>${esc(meetTxt(m))}</b><span>${esc(m.where||"")}${m.where&&m.agenda?" · ":""}${esc(m.agenda||"")}</span></div>`:`<div class="empty">No meeting set yet.</div>`}
+  
+  <h2 style="margin-top:22px!important">Notifications</h2>
+  ${n.items.slice(0,25).map(x=>`<div class="nti ${x.ts>seen?"new":""}"><div><p>${esc(x.t)}</p><small>${esc(x.by||"Team")} · ${esc(new Date(x.ts).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit",hour12:true}))}</small></div></div>`).join("")||`<div class="empty">No notifications yet.</div>`}</div>`}
+function notify(t){const r=myRole(),n=nts();n.items.unshift({id:uid(),t,by:r?r.t+(dispName(r.k)?" · "+dispName(r.k):""):"Team",u:me,ts:Date.now()});n.items=n.items.slice(0,60);put("company/notices",n)}
+function renderAll(soft){renderBell();R.forEach(x=>renderRole(x.k,soft));renderSec("biz",soft);renderSec("trd",soft);renderCompany(soft);renderOverall(soft);renderInsights();renderHistory(soft)}
+function refreshNames(){if(!user||!user.profiles)return;const ids=R.map(x=>D[x.k]&&D[x.k].uid).filter(id=>id&&!(id in names));if(!ids.length)return;
+  ids.forEach(id=>names[id]="");Promise.resolve(user.profiles(ids)).then(ps=>{ids.forEach(id=>{names[id]=(ps&&ps[id]&&ps[id].name)||""});renderAll(true)}).catch(()=>{})}
+
+/* ---- tabs ---- */
+function show(t){if(t==="founders")t=lastF;if(!TABS.includes(t))t="overall";const F=["ceo","cfo","coo"].includes(t);if(F)lastF=t;document.body.dataset.tab=t;document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===t||(F&&b.dataset.tab==="founders")));document.querySelectorAll(".subtabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));if(t==="insights"){drawChart();drawCap()}}
+window.addEventListener("hashchange",()=>show(location.hash.slice(1)));
+
+/* ---- events ---- */
+const fi=(k,sid,iid)=>{const s=role(k).secs.find(x=>x.id===sid);return[s,s&&iid?s.items.find(i=>i.id===iid):null]};
+document.body.addEventListener("click",e=>{const z=e.target.closest("img[data-zoom]");if(z){const o=document.createElement("div");o.className="lb";o.setAttribute("role","dialog");o.innerHTML=`<img src="${z.getAttribute("src")}" alt="">`;o.addEventListener("click",()=>o.remove());document.body.appendChild(o);return}const lb=e.target.closest(".lb");if(lb){lb.remove();return}});
+document.body.addEventListener("click",e=>{const t=e.target.closest("button");if(!t)return;const d=t.dataset;
+  if(t.id==="bell"){npOpen=!npOpen;if(!npOpen)seenSet(Date.now());renderBell();if(npOpen)seenSet(Date.now());return}
+  if(d.delnt){const n=nts();n.items=n.items.filter(x=>x.id!==d.delnt);put("company/notices",n);renderBell();return}
+  if(d.clrmeet){nts().meet=null;put("company/notices",nts());renderAll();return}
+  if(d.tab){const t=d.tab==="founders"?lastF:d.tab;location.hash=t;show(t);window.scrollTo(0,0)}
+  else if(d.claim){const r=role(d.claim);if(!r.uid&&me){r.uid=me;saveRole(d.claim);refreshNames();renderAll()}}
+  else if(d.release){const r=role(d.release);r.uid=null;saveRole(d.release);renderAll()}
+  else if(d.edit){edit[d.edit]=!edit[d.edit];renderAll()}
+  else if(d.cm){const[k,n]=d.cm.split("|");calM[k]+=+n;document.getElementById("c-"+k).innerHTML=calHTML(k)}
+  else if(d.delsec){const[k,sid]=d.delsec.split("|"),r=role(k);r.secs=r.secs.filter(s=>s.id!==sid);setScore(k);saveRole(k);renderAll()}
+  else if(d.deli){const[k,sid,iid]=d.deli.split("|"),[s]=fi(k,sid);if(s)s.items=s.items.filter(i=>i.id!==iid);setScore(k);saveRole(k);renderAll()}
+  else if(d.addsec){const r=role(d.addsec);r.secs.push({id:uid(),t:"New section",items:[]});saveRole(d.addsec);renderAll()}
+  else if(d.hd){const x=new Date(hDay+"T00:00");x.setDate(x.getDate()+(+d.hd));const k=ymd(x);if(k<=today&&k>=co().start){hDay=k;hEd={};renderHistory()}}
+  else if(d.hgo){hDay=d.hgo;hEd={};renderHistory()}
+  else if(d.hedit){hEd[d.hedit]=true;renderHistory();const ta=document.getElementById("he-"+d.hedit);if(ta)ta.focus()}
+  else if(d.hcancel){delete hEd[d.hcancel];renderHistory()}
+  else if(d.hsave){const k=d.hsave;if(mine(k)){const v=document.getElementById("he-"+k).value,r=role(k);if(v.trim())r.notes[hDay]=v;else delete r.notes[hDay];saveRole(k)}delete hEd[k];renderAll()}
+  else if(d.vote){const[id,k]=d.vote.split("|"),x=co().ideas.find(y=>y.id===id);if(x&&mine(k)){x.v=x.v||{};const cur=x.v[k]||0;x.v[k]=cur===0?1:cur===1?-1:0;if(!x.v[k])delete x.v[k];if(vYes(x)>=2&&(x.s||0)===0)x.s=1;saveCo();renderAll()}}
+  else if(d.ist){const x=co().ideas.find(y=>y.id===d.ist);if(x){x.s=((x.s||0)+1)%4;saveCo();renderAll()}}
+  else if(d.delup){const u=ups();u.items=u.items.filter(x=>x.id!==d.delup);put("company/updates",u);renderAll()}
+  else if(d.delidea){const c=co();c.ideas=c.ideas.filter(x=>x.id!==d.delidea);saveCo();renderAll()}
+  else if(d.delsp){const c=co();c.spend=c.spend.filter(x=>x.id!==d.delsp);saveCo();renderAll()}
+  else if(d.delas){const c=co();c.assets=c.assets.filter(x=>x.id!==d.delas);saveCo();renderAll()}
+  else if(d.delli){const c=co();c.liabs=c.liabs.filter(x=>x.id!==d.delli);saveCo();renderAll()}
+  else if(d.delimg){const[aid,iid]=d.delimg.split("|"),x=co().achv.find(y=>y.id===aid);if(x){x.imgs=(x.imgs||[]).filter(i=>i!==iid);saveCo();renderAll()}}
+  else if(d.delac){const c=co();c.achv=c.achv.filter(x=>x.id!==d.delac);saveCo();renderAll()}
+  else if(d.deldc){const c=co();c.docs=c.docs.filter(x=>x.id!==d.deldc);saveCo();renderAll()}
+  else if(d.pst){const x=co().proj.find(y=>y.id===d.pst);if(x){x.st=((x.st||0)+1)%4;saveCo();renderAll()}}
+  else if(d.delpj){const c=co();c.proj=c.proj.filter(x=>x.id!==d.delpj);saveCo();renderAll()}
+  else if(d.delbi){const c=co();c.binc=c.binc.filter(x=>x.id!==d.delbi);saveCo();renderAll()}
+  else if(d.delpay){const c=co();c.payouts=c.payouts.filter(x=>x.id!==d.delpay);saveCo();renderAll()}
+  else if(d.delmile){const c=co();c.miles=c.miles.filter(x=>x.id!==d.delmile);saveCo();renderAll()}
+  else if(d.delwk){const c=co();c.weekly=c.weekly.filter(x=>x.id!==d.delwk);saveCo();renderAll()}});
+document.body.addEventListener("change",e=>{const t=e.target,d=t.dataset;
+  if(t.type==="file"&&t.name==="f"){const l=t.closest(".pick");if(l){l.classList.toggle("on",t.files.length>0);l.firstChild.textContent=t.files.length?"📷 "+t.files.length+" photo"+(t.files.length>1?"s":"")+" ready":"📷 Add photos"}return}
+  if(d.acimg){const fl=t.files;if(!fl.length||!assets)return;msg("Uploading photos…");uploadAll(fl).then(ids=>{const x=co().achv.find(y=>y.id===d.acimg);if(x&&ids.length){x.imgs=(x.imgs||[]).concat(ids);saveCo();renderAll()}});return}
+  if(d.ck){const[k,id]=d.ck.split("|");if(!mine(k)){t.checked=!t.checked;return}const r=role(k),key=today+":"+id;if(t.checked)r.checks[key]=1;else delete r.checks[key];setScore(k);saveRole(k);renderAll()}
+  else if(d.mile){const m=co().miles.find(x=>x.id===d.mile);if(m){m.done=t.checked?today:null;saveCo();renderAll()}}
+  else if(d.wck){const c=co(),key=wk+":"+d.wck;if(t.checked)c.wchecks[key]=1;else delete c.wchecks[key];saveCo();renderAll()}
+  else if(d.rname){const r=role(d.rname);r.name=t.value.trim();saveRole(d.rname);renderAll()}
+  else if(d.ren){const[k,sid,iid]=d.ren.split("|"),[s,i]=fi(k,sid,iid),v=t.value.trim();if(!v)return;if(i)i.t=v;else if(s)s.t=v;saveRole(k)}
+  else if(d.reni){const x=co().ideas.find(y=>y.id===d.reni),v=t.value.trim();if(x&&v){x.t=v;saveCo()}}
+  else if(d.renp){const x=co().proj.find(y=>y.id===d.renp),v=t.value.trim();if(x&&v){x.t=v;saveCo()}}
+  else if(t.id==="hdate"){if(t.value&&t.value<=today){hDay=t.value;hEd={};renderHistory()}}
+  else if(d.renm||d.renw){const c=co(),x=(d.renm?c.miles:c.weekly).find(y=>y.id===(d.renm||d.renw)),v=t.value.trim();if(x&&v){x.t=v;saveCo()}}});
+document.body.addEventListener("submit",e=>{e.preventDefault();const f=e.target;
+  if(f.id==="ntf"){const v=f.t.value.trim();if(!v){f.t.focus();return}notify(v);renderBell();return}
+  if(f.id==="mtf"){const at=f.at.value;if(!at){f.at.focus();return}const m={at:new Date(at).toISOString(),where:f.where.value.trim(),agenda:f.agenda.value.trim()};nts().meet=m;notify("Next meeting: "+meetTxt(m)+(m.where?" · "+m.where:""));renderAll();return}
+  if(f.id==="upf"){const v=f.t.value.trim();if(!v||!owner){f.t.focus();return}ups().items.unshift({id:uid(),t:v,d:today});put("company/updates",ups());renderAll();return}
+  if(f.id==="idf"){const v=f.t.value.trim();if(!v){f.t.focus();return}co().ideas.push({id:uid(),t:v,w:f.w.value,d:today,s:0});saveCo();renderAll();return}
+  if(f.id==="spf"){const a=parseFloat(f.a.value);if(!(a>0)){f.a.focus();return}co().spend.push({id:uid(),d:f.d.value||today,c:f.c.value,a:Math.round(a*100)/100,n:f.n.value.trim()});saveCo();renderAll();return}
+  if(f.dataset.proj){const v=f.t.value.trim();if(!v){f.t.focus();return}co().proj.push({id:uid(),s:f.dataset.proj,t:v,st:0,d:today});saveCo();renderAll();return}
+  if(f.dataset.spf){const a=parseFloat(f.a.value);if(!(a>0)){f.a.focus();return}co().spend.push({id:uid(),s:f.dataset.spf,d:f.d.value||today,c:f.c.value,a:Math.round(a*100)/100,n:f.n.value.trim()});saveCo();renderAll();return}
+  if(f.id==="asf"||f.id==="lif"){const a=parseFloat(f.a.value);if(!(a>0)){f.a.focus();return}co()[f.id==="asf"?"assets":"liabs"].push({id:uid(),c:f.c.value,a:Math.round(a*100)/100,t:f.t.value.trim(),d:today});saveCo();renderAll();return}
+  if(f.id==="acf"){const v=f.t.value.trim();if(!v){f.t.focus();return}const fl=f.f?f.f.files:[],d=f.d.value||today;(async()=>{let imgs=[];if(fl&&fl.length&&assets){msg("Uploading photos…");imgs=await uploadAll(fl)}co().achv.push({id:uid(),d,t:v,imgs});saveCo();renderAll()})();return}
+  if(f.id==="dcf"){const t=f.t.value.trim();if(!t){f.t.focus();return}co().docs.push({id:uid(),c:f.c.value,t,d:today});saveCo();renderAll();return}
+  if(f.id==="bif"){const a=parseFloat(f.a.value);if(!(a>0)){f.a.focus();return}co().binc.push({id:uid(),d:f.d.value||today,a:Math.round(a*100)/100,n:f.n.value.trim()});saveCo();renderAll();return}
+  if(f.id==="payf"){const a=parseFloat(f.a.value);if(!(a>0)){f.a.focus();return}co().payouts.push({id:uid(),d:f.d.value||today,w:f.w.value,a:Math.round(a*100)/100});saveCo();renderAll();return}
+  const inp=f.querySelector("input"),v=inp.value.trim();if(!v)return;
+  if(f.dataset.additem){const[k,sid]=f.dataset.additem.split("|"),[s]=fi(k,sid);if(s){s.items.push({id:uid(),t:v});setScore(k);saveRole(k);renderAll();const n=document.querySelector(`[data-additem="${f.dataset.additem}"] input`);if(n)n.focus()}}
+  else if(f.dataset.addto){co()[f.dataset.addto].push({id:uid(),t:v});saveCo();renderAll();const n=document.querySelector(`[data-addto="${f.dataset.addto}"] input`);if(n)n.focus()}});
+const nT={};
+R.forEach(x=>document.getElementById("u-"+x.k).addEventListener("input",e=>{if(!mine(x.k))return;const r=role(x.k),v=e.target.value;if(v.trim())r.notes[today]=v;else delete r.notes[today];
+  const sv=document.getElementById("us-"+x.k);sv.textContent="Saving…";clearTimeout(nT[x.k]);nT[x.k]=setTimeout(()=>{saveRole(x.k);sv.textContent="Saved for the team"},500)}));
+
+/* ---- new day ---- */
+function tick(){const t=ymd(new Date());if(t===today)return;today=t;setWk();renderAll()}
+setInterval(tick,30000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)tick()});
+
+show(location.hash.slice(1));renderAll();
+
+/* ---- connect ---- */
+(async()=>{
+  const use=n=>window.claude&&window.claude.use?window.claude.use(n).catch(()=>null):Promise.resolve(null);
+  [db,user,assets]=await Promise.all([use("db"),use("user"),use("assets")]);
+  if(user){try{me=await user.id()}catch(e){}try{owner=!!(await user.isOwner())}catch(e){}}
+  if(!db){msg("Sign in to see the team's live data.");renderAll();return}
+  const tm=setTimeout(()=>msg("Still connecting to the team data…"),10000);
+  db.collection("roles").onSnapshot(snap=>{clearTimeout(tm);snap.docs.forEach(d=>{const p="roles/"+d.id;if(!(d.id in D)||pend[p]||busy[p])return;D[d.id]=JSON.parse(JSON.stringify(d.data()))});refreshNames();renderAll(true);msg("✓ Live. Updates from the team appear here as they happen.")},
+    ()=>{clearTimeout(tm);msg("Couldn't load the team data. Reopen the page to try again.")});
+  db.collection("company").onSnapshot(snap=>{snap.docs.forEach(d=>{if(d.id==="updates"){if(!pend["company/updates"]&&!busy["company/updates"])D.up=JSON.parse(JSON.stringify(d.data()));return}if(d.id==="notices"){if(!pend["company/notices"]&&!busy["company/notices"])D.nt=JSON.parse(JSON.stringify(d.data()));return}if(d.id!=="main"||pend["company/main"]||busy["company/main"])return;D.co=JSON.parse(JSON.stringify(d.data()))});renderAll(true)},()=>{});
+  const mineRole=R.find(x=>D[x.k]&&D[x.k].uid===me);if(mineRole&&!location.hash)show(mineRole.k);
+})();
+}
+</script>
+</body>
+</html>
