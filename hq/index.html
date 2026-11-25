@@ -211,6 +211,9 @@ th:first-child,td:first-child{text-align:left}
 #gate label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--mut)}
 #gate input{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:0}
 #gate button{font:inherit;font-weight:800;min-height:48px;background:var(--ink);color:var(--bg);border:0;cursor:pointer}
+#gate .pw{position:relative;display:block}#gate .pw input{padding-right:48px}
+#gate .eye{position:absolute;right:0;top:0;bottom:0;width:46px;min-height:0;display:grid;place-items:center;background:none;border:0;color:var(--mut);cursor:pointer;padding:0}
+#gate .eye:hover,#gate .eye[aria-pressed=true]{color:var(--ink)}#gate .eye[aria-pressed=true] .slash{display:none}
 #gate .lnk{background:none;border:0;color:var(--mut);font:inherit;font-size:14px;min-height:auto;cursor:pointer;text-decoration:underline}
 #gate form[hidden]{display:none}
 #reset-form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
@@ -230,7 +233,7 @@ body.authed .topbar{display:flex}
     <h1>HQ Portal</h1>
     <p class="hint">Founders only.</p>
     <label>Email<input name="email" type="email" required autocomplete="username"></label>
-    <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
+    <label>Password<span class="pw"><input name="password" type="password" required autocomplete="current-password"><button type="button" class="eye" aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path class="slash" d="M4 4l16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
     <button type="submit">Sign in</button>
     <p id="gate-msg" role="status"></p>
     <button type="button" id="forgot" class="lnk">Forgot password?</button>
@@ -240,13 +243,14 @@ body.authed .topbar{display:flex}
     <img src="/assets/logo.jpg" alt="Capital Malaya" width="904" height="400">
     <h1>New password</h1>
     <p class="hint">Choose a new password for the HQ Portal.</p>
-    <label>New password<input name="p1" type="password" required minlength="8" autocomplete="new-password"></label>
-    <label>Type it again<input name="p2" type="password" required minlength="8" autocomplete="new-password"></label>
+    <label>New password<span class="pw"><input name="p1" type="password" required minlength="8" autocomplete="new-password"><button type="button" class="eye" aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path class="slash" d="M4 4l16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
+    <label>Type it again<span class="pw"><input name="p2" type="password" required minlength="8" autocomplete="new-password"><button type="button" class="eye" aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path class="slash" d="M4 4l16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></label>
     <button type="submit">Save password</button>
     <p id="reset-msg" role="status"></p>
   </form>
 </div>
 <div class="topbar"><a href="/">← capitalmalaya.com</a><button type="button" id="signout">Sign out</button></div>
+<script>document.addEventListener("click",e=>{const b=e.target.closest("#gate .eye");if(!b)return;e.preventDefault();const i=b.parentNode.querySelector("input"),on=i.type==="password";i.type=on?"text":"password";b.setAttribute("aria-pressed",on);b.setAttribute("aria-label",on?"Hide password":"Show password");i.focus()});</script>
 <header class="brand"><img src="/assets/logo.jpg" alt="Capital Malaya" width="904" height="400"><button type="button" class="bell" id="bell" aria-label="Notifications" aria-expanded="false" aria-controls="np"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="badge" id="bdg" hidden></span></button></header>
 <div class="np" id="np" hidden></div>
 <nav class="tabs" aria-label="Sections">
