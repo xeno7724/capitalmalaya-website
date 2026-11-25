@@ -36,7 +36,7 @@
       const assets={upload:async blob=>{const path=u.id+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,8)+".jpg";const {error}=await sb.storage.from("hq-photos").upload(path,blob,{contentType:blob.type||"image/jpeg"});if(error)throw error;return{id:sb.storage.from("hq-photos").getPublicUrl(path).data.publicUrl}}};
       done({db,user,assets});
     }
-    document.addEventListener("DOMContentLoaded",()=>{
+    domReady.then(()=>{
       const gf=document.getElementById("gate-form"),gm=document.getElementById("gate-msg");
       gf.addEventListener("submit",async e=>{e.preventDefault();gm.textContent="Signing in…";const {error}=await sb.auth.signInWithPassword({email:gf.email.value.trim().toLowerCase(),password:gf.password.value});
         gm.textContent=!error?"":/confirm/i.test(error.message)?"Email not confirmed yet.":/credentials/i.test(error.message)?"Wrong email or password. Tap \"Forgot password?\" to set a new one.":"Couldn't sign in: "+error.message});
