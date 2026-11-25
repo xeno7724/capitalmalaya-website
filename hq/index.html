@@ -434,7 +434,7 @@ const secIn=k=>k==="trd"?sum(co().payouts)*.6:sum(co().binc);
 const secCap=k=>secIn(k)-secOut(k);
 const capital=()=>secCap("biz")+secCap("trd")-secOut("hq");
 const PST=["Idea","Testing","Running","Stopped"];
-const ACATS=["Cash in bank","Prop firm account","Equipment","Investment","Other"],LCATS=["Money owed to a founder","Unpaid bill or subscription","Rent","Loan","Other"],DCATS=["Agreement","SOP","Meeting minutes","Receipt","Plan","Other"];
+const ACATS=["Cash in bank","Prop firm account","Long-term investment","Short-term investment","Equipment","Other"],LCATS=["Money owed to a founder","Unpaid bill or subscription","Rent","Loan","Other"],DCATS=["Agreement","SOP","Meeting minutes","Receipt","Plan","Other"];
 const assetsT=()=>sum(co().assets),liabsT=()=>sum(co().liabs),netWorth=()=>capital()+assetsT()-liabsT();
 const SEC={biz:{t:"Business",h:"Business.",sub:"Long term · online, no-product business, easy to manage with AI",lead:"coo"},trd:{t:"Trading & Investment",h:"Trading & Investment.",sub:"Short term · prop firm accounts and investments",lead:"ceo"}};
 /* ---- overall ---- */
