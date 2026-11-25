@@ -17,7 +17,7 @@
   import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm").then(({createClient})=>{
     const sb=createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY);window.__sb=sb;
     const gate=()=>document.getElementById("gate");
-    let started=false;
+    let started=false,recovering=/type=recovery/.test(location.hash);
     async function start(session){
       if(started)return;started=true;await domReady;const u=session.user,email=(u.email||"").toLowerCase();
       const {data:f}=await sb.from("founders").select("email,is_owner").eq("email",email).maybeSingle();
@@ -38,11 +38,20 @@
     }
     document.addEventListener("DOMContentLoaded",()=>{
       const gf=document.getElementById("gate-form"),gm=document.getElementById("gate-msg");
-      gf.addEventListener("submit",async e=>{e.preventDefault();gm.textContent="Signing in…";const {error}=await sb.auth.signInWithPassword({email:gf.email.value.trim(),password:gf.password.value});gm.textContent=error?"Wrong email or password.":""});
+      gf.addEventListener("submit",async e=>{e.preventDefault();gm.textContent="Signing in…";const {error}=await sb.auth.signInWithPassword({email:gf.email.value.trim().toLowerCase(),password:gf.password.value});
+        gm.textContent=!error?"":/confirm/i.test(error.message)?"Email not confirmed yet.":/credentials/i.test(error.message)?"Wrong email or password. Tap \"Forgot password?\" to set a new one.":"Couldn't sign in: "+error.message});
+      document.getElementById("forgot").addEventListener("click",async()=>{const em=gf.email.value.trim().toLowerCase();if(!em){gm.textContent="Type your email first, then tap Forgot password.";gf.email.focus();return}
+        gm.textContent="Sending…";const {error}=await sb.auth.resetPasswordForEmail(em,{redirectTo:location.origin+"/hq/"});
+        gm.textContent=error?(/rate|seconds/i.test(error.message)?"Too many tries. Wait a minute and try again.":"Couldn't send: "+error.message):"Check your email for a link to set a new password."});
+      const rf=document.getElementById("reset-form"),rm=document.getElementById("reset-msg");
+      rf.addEventListener("submit",async e=>{e.preventDefault();if(rf.p1.value!==rf.p2.value){rm.textContent="The two passwords don't match.";return}
+        rm.textContent="Saving…";const {error}=await sb.auth.updateUser({password:rf.p1.value});
+        if(error){rm.textContent="Couldn't save: "+error.message;return}rm.textContent="Saved. Opening HQ…";recovering=false;const {data:{session}}=await sb.auth.getSession();if(session)start(session)});
       document.getElementById("signout").addEventListener("click",async()=>{await sb.auth.signOut();location.reload()});
     });
-    sb.auth.getSession().then(async({data:{session}})=>{if(session)start(session);else{await domReady;gate().hidden=false;const m=document.getElementById("conn");if(m)m.textContent="Sign in to see the team's live data."}});
-    sb.auth.onAuthStateChange((_e,ses)=>{if(ses)start(ses)});
+    const showReset=async()=>{await domReady;gate().hidden=false;document.getElementById("gate-form").hidden=true;document.getElementById("reset-form").hidden=false};
+    sb.auth.getSession().then(async({data:{session}})=>{if(recovering){showReset();return}if(session)start(session);else{await domReady;gate().hidden=false;const m=document.getElementById("conn");if(m)m.textContent="Sign in to see the team's live data."}});
+    sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="PASSWORD_RECOVERY"){recovering=true;showReset();return}if(ses&&!recovering)start(ses)});
   }).catch(()=>done(null));
 })();
 </script>
@@ -202,6 +211,10 @@ th:first-child,td:first-child{text-align:left}
 #gate label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--mut)}
 #gate input{width:100%;font:inherit;font-size:16px;padding:12px 14px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:0}
 #gate button{font:inherit;font-weight:800;min-height:48px;background:var(--ink);color:var(--bg);border:0;cursor:pointer}
+#gate .lnk{background:none;border:0;color:var(--mut);font:inherit;font-size:14px;min-height:auto;cursor:pointer;text-decoration:underline}
+#gate form[hidden]{display:none}
+#reset-form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
+#reset-msg{min-height:1.2em;margin:0;font-size:14px;color:var(--mut);text-align:center}
 #gate-msg{min-height:1.2em;margin:0;font-size:14px;color:var(--mut);text-align:center}
 #gate a,.topbar a{color:var(--mut);text-decoration:none;font-size:14px;text-align:center}
 .topbar{display:none;justify-content:space-between;align-items:center;max-width:620px;margin:0 auto;padding:10px 20px 0}
@@ -220,7 +233,17 @@ body.authed .topbar{display:flex}
     <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
     <button type="submit">Sign in</button>
     <p id="gate-msg" role="status"></p>
+    <button type="button" id="forgot" class="lnk">Forgot password?</button>
     <a href="/">← capitalmalaya.com</a>
+  </form>
+  <form id="reset-form" hidden>
+    <img src="/assets/logo.jpg" alt="Capital Malaya" width="904" height="400">
+    <h1>New password</h1>
+    <p class="hint">Choose a new password for the HQ Portal.</p>
+    <label>New password<input name="p1" type="password" required minlength="8" autocomplete="new-password"></label>
+    <label>Type it again<input name="p2" type="password" required minlength="8" autocomplete="new-password"></label>
+    <button type="submit">Save password</button>
+    <p id="reset-msg" role="status"></p>
   </form>
 </div>
 <div class="topbar"><a href="/">← capitalmalaya.com</a><button type="button" id="signout">Sign out</button></div>
