@@ -313,7 +313,7 @@ body.authed .topbar{display:flex}
 <footer class="legal">© 2026 Capital Malaya. All rights reserved.<br>For internal use by the founding team only.</footer>
 <script>
 {
-const R=[{k:"ceo",t:"CEO",n:"Chief Executive Officer",d:"Decisions, overall strategy and the Trading section."},{k:"cfo",t:"CFO",n:"Chief Financial Officer",d:"Company fund, records and P&L for both sections."},{k:"coo",t:"COO",n:"Chief Operating Officer",d:"Daily operations and execution."}];
+const R=[{k:"ceo",t:"CEO",n:"Chief Executive Officer",d:"Decisions, strategy and the Trading desk."},{k:"cfo",t:"CFO",n:"Chief Financial Officer",d:"Company money, records, spending and Investment."},{k:"coo",t:"COO",n:"Chief Operating Officer",d:"Daily operations and execution."}];
 const RMS={
 ceo:[{m:"Leadership",l:["What a CEO actually does: vision, people, capital","Writing a clear vision and mission for Capital Malaya","Setting goals: OKRs explained","Making decisions: reversible vs irreversible","Prioritising: the Eisenhower matrix and saying no","Running a good meeting: agenda, owners, deadlines","Giving and receiving feedback","Delegation: what to keep and what to hand off"]},
  {m:"Self-leadership",l:["Leading yourself before leading others","Time management for a student CEO","Deep work: focus without the phone","Energy: sleep, exercise and food for performance","Building habits that stick","Handling stress and pressure","Learning how to learn faster"]},
@@ -463,7 +463,8 @@ const trdIn=()=>sum(co().payouts)*.6,invIn=()=>sum(co().iinc);
 const secIn=k=>k==="trd"?trdIn()+invIn():sum(co().binc);
 const moneyIn=()=>secIn("trd")+secIn("biz");
 const capital=()=>moneyIn()-spent();
-const leadOf=k=>{const L=R.find(r=>r.k===SEC[k].lead);return L?L.t+(dispName(L.k)?" · "+esc(dispName(L.k)):""):""};
+const who1=k=>{const L=R.find(r=>r.k===k);return L?L.t+(dispName(k)?" · "+esc(dispName(k)):""):""};
+const leadOf=k=>k==="trd"?"Trading: "+who1("ceo")+" · Investment: "+who1("cfo"):SEC[k].lead?who1(SEC[k].lead):"";
 const SFOR={trd:"Trading",inv:"Investment",biz:"Business",hq:"Company"};
 const PST=["Idea","Testing","Running","Stopped"];
 const ACATS=["Cash in bank","Prop firm account","Long-term investment","Short-term investment","Equipment","Other"],LCATS=["Money owed to a founder","Unpaid bill or subscription","Rent","Loan","Other"],DCATS=["Agreement","SOP","Meeting minutes","Receipt","Plan","Other"];
@@ -527,7 +528,7 @@ function renderCompany(soft){const p=document.getElementById("p-company");if(sof
   <details class="guide"><summary>How the money works <span aria-hidden="true">+</span></summary>
   <ol class="gflow"><li><b>Money in</b><span>Trading (60% of payouts) + Investment + Business</span></li><li><b>− Spending</b><span>= Company capital</span></li><li><b>+ Assets − Liabilities</b><span>= Net worth</span></li></ol>
   <p class="gh">Where to add what</p>
-  <div class="glist"><div><b>Payout</b><span>Trading &amp; Investment → Trading. Add the full payout; HQ splits 60% company, 40% founder.</span></div><div><b>Investment profit or dividend</b><span>Trading &amp; Investment → Investment → Money in.</span></div><div><b>Business income</b><span>Business → Money in.</span></div><div><b>Anything we pay for</b><span>Company → Spending (CFO only). Pick who it was for: Trading, Investment, Business or Company.</span></div><div><b>Something we own</b><span>Company → Assets (CFO only). Shares, a funded account, equipment.</span></div><div><b>Something we owe</b><span>Company → Liabilities (CFO only). E.g. a founder paid from their own pocket.</span></div></div>
+  <div class="glist"><div><b>Payout</b><span>Trading &amp; Investment → Trading. Add the full payout; HQ splits 60% company, 40% founder.</span></div><div><b>Investment profit or dividend</b><span>Trading &amp; Investment → Investment → Money in (CFO only).</span></div><div><b>Business income</b><span>Business → Money in.</span></div><div><b>Anything we pay for</b><span>Company → Spending (CFO only). Pick who it was for: Trading, Investment, Business or Company.</span></div><div><b>Something we own</b><span>Company → Assets (CFO only). Shares, a funded account, equipment.</span></div><div><b>Something we owe</b><span>Company → Liabilities (CFO only). E.g. a founder paid from their own pocket.</span></div></div>
   <p class="gh">One rule</p>
   <p class="gp">Money comes in at the sections. Money goes out only in Company.</p>
   <p class="gh">When we buy something that keeps its value</p>
@@ -540,12 +541,12 @@ function renderCompany(soft){const p=document.getElementById("p-company");if(sof
 function renderSec(k,soft){const p=document.getElementById("p-"+k);if(soft&&busyIn(p))return;const c=co(),S=SEC[k],ed=edit[k];
   const fd=d=>new Date(d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
   const byDate=a=>a.slice().sort((x,y)=>x.d<y.d?1:-1);
-  const projBlock=(sub,title,hint,ph)=>{const proj=c.proj.filter(x=>x.s===k&&(k!=="trd"||(x.sub||"t")===sub)).sort((a,b)=>(a.st===3)-(b.st===3)||(a.d<b.d?1:-1));
+  const projBlock=(sub,title,hint,ph)=>{const lk=k==="trd"&&sub==="i"&&!mine("cfo");const proj=c.proj.filter(x=>x.s===k&&(k!=="trd"||(x.sub||"t")===sub)).sort((a,b)=>(a.st===3)-(b.st===3)||(a.d<b.d?1:-1));
     return `<h3 class="sub3">${title} <span>${proj.filter(x=>x.st!==3).length} active</span></h3><p class="hint">${hint}</p>
-    ${db?`<form class="add" data-proj="${k}">${k==="trd"?`<input type="hidden" name="sub" value="${sub}">`:""}<input class="txt" name="t" placeholder="${ph}" aria-label="New ${title.toLowerCase()}" style="flex:1"><button type="submit" class="solid">Add</button></form>`:""}
-    ${proj.map(x=>`<div class="idea ${x.st===3?"dn":""}"><div>${ed?`<input class="txt" value="${esc(x.t)}" data-renp="${x.id}" aria-label="Edit">`:`<p>${esc(x.t)}</p>`}<small>Added ${new Date(x.d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</small></div>${ed?`<button class="del" type="button" data-delpj="${x.id}" aria-label="Remove">×</button>`:db?`<button type="button" class="stb s${x.st||0}" data-pst="${x.id}" aria-label="Change status">${PST[x.st||0]}</button>`:`<span class="hint">${PST[x.st||0]}</span>`}</div>`).join("")||`<div class="empty">Nothing here yet.</div>`}`};
-  const incForm=(id,ph)=>db?`<form class="add" id="${id}"><input class="fld" type="date" name="d" value="${today}" aria-label="Date"><input class="fld" type="number" name="a" min="0" step="0.01" inputmode="decimal" placeholder="Amount in USD" aria-label="Amount in USD" style="flex:1;min-width:140px"><input class="txt" name="n" placeholder="${ph}" aria-label="Source" style="flex:1 1 100%"><button type="submit" class="solid">Add money in</button></form>`:"";
-  const incList=(arr,del,empty)=>byDate(arr).map(x=>`<div class="lr"><b>${money(x.a)}<small>${fd(x.d)}${x.n?" · "+esc(x.n):""}</small></b>${ed?`<button class="del" type="button" data-${del}="${x.id}" aria-label="Remove">×</button>`:""}</div>`).join("")||`<div class="empty">${empty}</div>`;
+    ${lk?`<p class="hint">Only the CFO adds or changes investments.</p>`:""}${db&&!lk?`<form class="add" data-proj="${k}">${k==="trd"?`<input type="hidden" name="sub" value="${sub}">`:""}<input class="txt" name="t" placeholder="${ph}" aria-label="New ${title.toLowerCase()}" style="flex:1"><button type="submit" class="solid">Add</button></form>`:""}
+    ${proj.map(x=>`<div class="idea ${x.st===3?"dn":""}"><div>${ed&&!lk?`<input class="txt" value="${esc(x.t)}" data-renp="${x.id}" aria-label="Edit">`:`<p>${esc(x.t)}</p>`}<small>Added ${new Date(x.d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</small></div>${ed&&!lk?`<button class="del" type="button" data-delpj="${x.id}" aria-label="Remove">×</button>`:db&&!lk?`<button type="button" class="stb s${x.st||0}" data-pst="${x.id}" aria-label="Change status">${PST[x.st||0]}</button>`:`<span class="hint">${PST[x.st||0]}</span>`}</div>`).join("")||`<div class="empty">Nothing here yet.</div>`}`};
+  const incForm=(id,ph)=>db&&!(id==="iif"&&!mine("cfo"))?`<form class="add" id="${id}"><input class="fld" type="date" name="d" value="${today}" aria-label="Date"><input class="fld" type="number" name="a" min="0" step="0.01" inputmode="decimal" placeholder="Amount in USD" aria-label="Amount in USD" style="flex:1;min-width:140px"><input class="txt" name="n" placeholder="${ph}" aria-label="Source" style="flex:1 1 100%"><button type="submit" class="solid">Add money in</button></form>`:"";
+  const incList=(arr,del,empty)=>byDate(arr).map(x=>`<div class="lr"><b>${money(x.a)}<small>${fd(x.d)}${x.n?" · "+esc(x.n):""}</small></b>${ed&&del?`<button class="del" type="button" data-${del}="${x.id}" aria-label="Remove">×</button>`:""}</div>`).join("")||`<div class="empty">${empty}</div>`;
   const top=`<div class="top"><div><h1>${S.h}</h1><p class="sub">${S.sub}</p><p class="lead">${leadOf(k)?`Led by <b>${leadOf(k)}</b>`:"Lead not decided yet"} · records by CFO</p></div>${db?`<button type="button" data-edit="${k}" class="${ed?"solid":""}">${ed?"Done":"Edit"}</button>`:""}</div>`;
   const note=`<p class="hint" style="margin-top:6px">Spending is recorded once, in Company.</p>`;
   if(k==="trd"){
@@ -560,9 +561,9 @@ function renderSec(k,soft){const p=document.getElementById("p-"+k);if(soft&&busy
     ${pays}
     <h2>Investment</h2>
     ${projBlock("i","Positions","What the company holds, Malaysian markets first.","Add a position, e.g. Maybank shares…")}
-    <h3 class="sub3">Money in <span>${money(invIn())} total</span></h3><p class="hint">Profits, dividends and returns from investments. All of it goes to the company.</p>
+    <h3 class="sub3">Money in <span>${money(invIn())} total</span></h3><p class="hint">Profits, dividends and returns from investments. All of it goes to the company. Managed by the CFO.</p>
     ${incForm("iif","Where did it come from? e.g. dividend, sold position")}
-    ${incList(c.iinc,"delii","No investment income yet.")}`;
+    ${incList(c.iinc,mine("cfo")?"delii":"","No investment income yet.")}`;
     return}
   document.getElementById("sx-"+k).innerHTML=top+`
   <div class="capc"><small>Money in</small><b>${money(secIn(k))}</b><span>Every ringgit or dollar the business earns goes to the company</span></div>${note}
