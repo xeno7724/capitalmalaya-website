@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /hq/
+
+Sitemap: https://capitalmalaya.com/sitemap.xml
