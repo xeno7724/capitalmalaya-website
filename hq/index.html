@@ -23,14 +23,14 @@
       const {data:f}=await sb.from("founders").select("email,is_owner").eq("email",email).maybeSingle();
       if(!f){document.getElementById("gate-msg").textContent="This account isn't on the founders list. Ask Aqid to add your email.";started=false;await sb.auth.signOut();return}
       gate().hidden=true;document.body.classList.add("authed");
-      const chans={};
+      const chans={},VER={},LOAD={};
       const db={
         collection:c=>({onSnapshot:(cb,err)=>{
-          const load=async()=>{const {data,error}=await sb.from("hq_docs").select("id,data").eq("collection",c);if(error){err&&err(error);return}cb({docs:data.map(r=>({id:r.id,data:()=>r.data}))})};
+          const load=async()=>{const {data,error}=await sb.from("hq_docs").select("id,data,updated_at").eq("collection",c);if(error){err&&err(error);return}data.forEach(r=>{VER[c+"/"+r.id]=r.updated_at});cb({docs:data.map(r=>({id:r.id,data:()=>r.data}))})};LOAD[c]=load;
           load();if(!chans[c])chans[c]=sb.channel("hq-"+c).on("postgres_changes",{event:"*",schema:"public",table:"hq_docs",filter:"collection=eq."+c},load).subscribe();
           document.addEventListener("visibilitychange",()=>{if(!document.hidden)load()});
         }}),
-        doc:p=>({set:async o=>{const i=p.indexOf("/"),c=p.slice(0,i),id=p.slice(i+1);const {error}=await sb.from("hq_docs").upsert({collection:c,id,data:o,updated_by:u.id,updated_at:new Date().toISOString()});if(error)throw error}})
+        doc:p=>({set:async o=>{const i=p.indexOf("/"),c=p.slice(0,i),id=p.slice(i+1),v=VER[p],now=new Date().toISOString();if(v){const {data,error}=await sb.from("hq_docs").update({data:o,updated_by:u.id,updated_at:now}).eq("collection",c).eq("id",id).eq("updated_at",v).select("updated_at");if(error)throw error;if(!data.length){const e=new Error("conflict");e.conflict=true;e.reload=()=>LOAD[c]&&LOAD[c]();throw e}VER[p]=data[0].updated_at;return}const {data,error}=await sb.from("hq_docs").upsert({collection:c,id,data:o,updated_by:u.id,updated_at:now}).select("updated_at");if(error)throw error;if(data&&data[0])VER[p]=data[0].updated_at}})
       };
       const user={id:async()=>u.id,isOwner:async()=>!!f.is_owner,profiles:async ids=>{const {data}=await sb.from("founders").select("user_id,name").in("user_id",ids);const o={};(data||[]).forEach(r=>o[r.user_id]={name:r.name});return o}};
       const assets={upload:async blob=>{const path=u.id+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,8)+".jpg";const {error}=await sb.storage.from("hq-photos").upload(path,blob,{contentType:blob.type||"image/jpeg"});if(error)throw error;return{id:sb.storage.from("hq-photos").getPublicUrl(path).data.publicUrl}}};
@@ -415,8 +415,8 @@ const busyIn=el=>{const a=document.activeElement;return !!a&&el.contains(a)&&((a
 const pend={},busy={},tmr={};
 function put(path,obj){if(!db){msg("Not connected, so this change isn't saved.");return}pend[path]=obj;clearTimeout(tmr[path]);tmr[path]=setTimeout(()=>flush(path),450)}
 async function flush(path){if(busy[path]||!pend[path])return;const o=JSON.parse(JSON.stringify(pend[path]));delete pend[path];busy[path]=1;
-  try{await db.doc(path).set(o);msg("✓ Live. Saved for the whole team.")}catch(e){msg("Couldn't save. Ask Aqid to give you edit access to this page.")}
-  busy[path]=0;if(pend[path])flush(path)}
+  let rl=null;try{await db.doc(path).set(o);msg("✓ Live. Saved for the whole team.")}catch(e){if(e&&e.conflict){rl=e.reload;delete pend[path];msg("Someone else saved at the same time. HQ has loaded the latest — please redo your last change.")}else msg("Couldn't save. Ask Aqid to give you edit access to this page.")}
+  busy[path]=0;if(rl){rl();return}if(pend[path])flush(path)}
 const saveRole=k=>put("roles/"+k,role(k)),saveCo=()=>put("company/main",co());
 
 function setScore(k){const r=role(k),it=r.secs.flatMap(s=>s.items),d=it.filter(i=>r.checks[today+":"+i.id]).length;if(it.length)r.scores[today]=d/it.length;else delete r.scores[today]}
