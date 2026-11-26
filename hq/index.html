@@ -650,6 +650,23 @@ function renderHistory(soft){const p=document.getElementById("p-history"),a=docu
   ${ms.length?`<h2>Milestones reached</h2>${ms.map(m=>`<div class="empty" style="color:var(--ink);font-weight:600">✓ ${esc(m.t)}</div>`).join("")}`:""}`}
 let npOpen=false;
 let ENQ=[];
+const PUSH_FN="https://lijgpwqlvefkwmrmojnr.supabase.co/functions/v1/notify";
+const pushOK=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
+const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent),isStandalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+let pushOn=false,pushMsg="";
+async function pushSub(){try{const reg=await navigator.serviceWorker.getRegistration("/hq/");return reg?await reg.pushManager.getSubscription():null}catch(e){return null}}
+if(pushOK())pushSub().then(s=>{pushOn=!!s&&Notification.permission==="granted";renderBell()});
+const b64u=s=>{const p="=".repeat((4-s.length%4)%4),b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0))};
+async function pushEnable(){const sb=window.__sb;pushMsg="Turning on…";renderBell();
+  try{const perm=await Notification.requestPermission();if(perm!=="granted"){pushMsg="Notifications are blocked. Allow them in your phone's settings.";renderBell();return}
+    const reg=await navigator.serviceWorker.register("/hq/sw.js",{scope:"/hq/"});await navigator.serviceWorker.ready;
+    const {publicKey}=await (await fetch(PUSH_FN)).json();
+    const sub=await reg.pushManager.getSubscription()||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(publicKey)});
+    const j=sub.toJSON();const {error}=await sb.from("push_subs").insert({endpoint:j.endpoint,sub:j});if(error&&error.code!=="23505")throw error;
+    pushOn=true;pushMsg="On. You'll get a notification for new notices and enquiries."}
+  catch(e){pushMsg="Couldn't turn on: "+(e.message||e)}renderBell()}
+async function pushDisable(){const sb=window.__sb;try{const s=await pushSub();if(s){await sb.from("push_subs").delete().eq("endpoint",s.endpoint);await s.unsubscribe()}pushOn=false;pushMsg="Off on this device."}catch(e){pushMsg="Couldn't turn off: "+(e.message||e)}renderBell()}
+const pushHTML=()=>`<h2 style="margin-top:22px!important">Phone notifications</h2>${!pushOK()?(isIOS&&!isStandalone?`<p class="hint">On iPhone: tap Share → <b>Add to Home Screen</b>, open <b>CM HQ</b> from your home screen, then turn this on.</p>`:`<p class="hint">This browser can't receive notifications.</p>`):`<div class="row" style="margin:4px 0 6px"><button type="button" data-push="${pushOn?"off":"on"}" class="${pushOn?"":"solid"}">${pushOn?"Turn off on this device":"Turn on notifications"}</button></div><p class="hint">${esc(pushMsg||(pushOn?"On for this device.":"Get a notification on this device for new notices and enquiries."))}</p>`}`;
 async function loadEnq(){const sb=window.__sb;if(!sb||!document.body.classList.contains("authed"))return;const {data,error}=await sb.from("enquiries").select("id,name,email,message,created_at").order("created_at",{ascending:false}).limit(50);if(error||!data)return;const ch=JSON.stringify(data)!==JSON.stringify(ENQ);ENQ=data;if(ch){renderOverall(true);renderBell()}}
 setTimeout(loadEnq,2000);setTimeout(loadEnq,6000);setInterval(loadEnq,60000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadEnq()});
 const enqDate=e=>new Date(e.created_at).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit",hour12:true});
@@ -661,7 +678,7 @@ function renderBell(){const n=nts(),seen=seenGet(),ne=ENQ.filter(e=>Date.parse(e
   b.hidden=!un;b.textContent=un>9?"9+":un;document.getElementById("bell").setAttribute("aria-expanded",npOpen);
   const p=document.getElementById("np");p.hidden=!npOpen;if(!npOpen)return;if(busyIn(p))return;
   const m=meetSoon();
-  p.innerHTML=`<div class="npi"><h2>Next meeting</h2><p class="hint" style="margin:-4px 0 12px">Set by the CEO. View only.</p>${m?`<div class="meet"><b>${esc(meetTxt(m))}</b><span>${esc(m.where||"")}${m.where&&m.agenda?" · ":""}${esc(m.agenda||"")}</span></div>`:`<div class="empty">No meeting set yet.</div>`}
+  p.innerHTML=`<div class="npi">${pushHTML()}<h2 style="margin-top:22px!important">Next meeting</h2><p class="hint" style="margin:-4px 0 12px">Set by the CEO. View only.</p>${m?`<div class="meet"><b>${esc(meetTxt(m))}</b><span>${esc(m.where||"")}${m.where&&m.agenda?" · ":""}${esc(m.agenda||"")}</span></div>`:`<div class="empty">No meeting set yet.</div>`}
   
   ${ne.length?`<h2 style="margin-top:22px!important">New enquiries</h2>${ne.slice(0,10).map(e=>`<div class="nti new"><div><p>${esc(e.name||"Someone")} sent an enquiry</p><small>${esc(enqDate(e))} · see Overall</small></div></div>`).join("")}`:""}
   <h2 style="margin-top:22px!important">Notifications</h2>
@@ -683,6 +700,7 @@ document.body.addEventListener("click",e=>{const t=e.target.closest("button");if
   if(d.delnt){const n=nts();n.items=n.items.filter(x=>x.id!==d.delnt);put("company/notices",n);renderBell();return}
   if(d.clrmeet){nts().meet=null;put("company/notices",nts());renderAll();return}
   if(d.tab){const t=d.tab==="founders"?lastF:d.tab;location.hash=t;show(t);window.scrollTo(0,0)}
+  else if(d.push){if(d.push==="on")pushEnable();else pushDisable()}
   else if(d.backup){const sb=window.__sb;if(!sb)return;t.disabled=true;t.textContent="Preparing…";(async()=>{
     try{const [a,b]=await Promise.all([sb.from("hq_docs").select("*"),sb.from("enquiries").select("*")]);if(a.error)throw a.error;
       const blob=new Blob([JSON.stringify({exported_at:new Date().toISOString(),hq_docs:a.data,enquiries:b.data||[]},null,2)],{type:"application/json"});
