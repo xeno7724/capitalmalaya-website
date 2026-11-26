@@ -497,7 +497,7 @@ function renderOverall(soft){const p=document.getElementById("p-overall");if(sof
   ${ed?`<form class="add" data-addto="miles"><input class="txt" placeholder="Add a milestone…" aria-label="New milestone"><button type="submit">Add</button></form>`:""}
   <h2>Every Sunday <span>${wd}/${c.weekly.length}</span></h2><p class="hint">The founders' weekly check. Resets every Sunday.</p>${weekly}
   ${ed?`<form class="add" data-addto="weekly"><input class="txt" placeholder="Add a weekly task…" aria-label="New weekly task"><button type="submit">Add</button></form>`:""}
-  <h2>What's new <span>${ups().items.length?"updated "+new Date(ups().items[0].d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):""}</span></h2><p class="hint">Changes to this HQ, posted by Aqid.</p>
+  <h2>What's new <span>${ups().items.length?"updated "+new Date(ups().items[0].d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}):""}</span></h2><p class="hint">Changes to this HQ, posted by Aqid.</p>${owner&&db?`<div class="row" style="margin:4px 0 12px"><button type="button" data-backup="1">Download backup</button><span class="hint" style="align-self:center">Saves all HQ data to a file. Do it every Sunday.</span></div>`:""}
   ${owner&&db?`<form class="add" id="upf"><input class="txt" name="t" placeholder="Describe the update…" aria-label="New update"><button type="submit">Post update</button></form>`:""}
   ${ups().items.slice(0,10).map(x=>`<div class="lr"><b style="font-weight:600;font-size:16px">${esc(x.t)}<small>${longDate(x.d)}</small></b>${owner&&ed?`<button class="del" type="button" data-delup="${x.id}" aria-label="Remove update">×</button>`:""}</div>`).join("")||`<div class="empty">No updates posted yet.</div>`}`}
 
@@ -683,6 +683,11 @@ document.body.addEventListener("click",e=>{const t=e.target.closest("button");if
   if(d.delnt){const n=nts();n.items=n.items.filter(x=>x.id!==d.delnt);put("company/notices",n);renderBell();return}
   if(d.clrmeet){nts().meet=null;put("company/notices",nts());renderAll();return}
   if(d.tab){const t=d.tab==="founders"?lastF:d.tab;location.hash=t;show(t);window.scrollTo(0,0)}
+  else if(d.backup){const sb=window.__sb;if(!sb)return;t.disabled=true;t.textContent="Preparing…";(async()=>{
+    try{const [a,b]=await Promise.all([sb.from("hq_docs").select("*"),sb.from("enquiries").select("*")]);if(a.error)throw a.error;
+      const blob=new Blob([JSON.stringify({exported_at:new Date().toISOString(),hq_docs:a.data,enquiries:b.data||[]},null,2)],{type:"application/json"});
+      const u=URL.createObjectURL(blob),l=document.createElement("a");l.href=u;l.download="capital-malaya-hq-backup-"+today+".json";document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);t.textContent="Downloaded ✓"}
+    catch(e){t.textContent="Backup failed, try again"}setTimeout(()=>{t.disabled=false;t.textContent="Download backup"},3000)})()}
   else if(d.claim){const r=role(d.claim);const has=["ceo","cfo","coo"].some(x=>D[x]&&D[x].uid===me);if(!r.uid&&me&&!has){r.uid=me;saveRole(d.claim);refreshNames();renderAll()}}
   else if(d.release){const r=role(d.release);r.uid=null;saveRole(d.release);renderAll()}
   else if(d.edit){edit[d.edit]=!edit[d.edit];renderAll()}
