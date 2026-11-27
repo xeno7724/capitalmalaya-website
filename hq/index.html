@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Capital Malaya HQ</title>
 <script src="/config.js"></script>
+<script>/* show script errors on screen (helps debug old phones) */
+(function(){const show=t=>{const go=()=>{const m=document.getElementById("conn");if(m){m.textContent="Error: "+t;m.style.color="#dc2626"}};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go()};
+window.addEventListener("error",e=>show(String(e.message||e.error||"script error").slice(0,140)+" @"+(e.lineno||"?")+":"+(e.colno||"?")));
+window.addEventListener("unhandledrejection",e=>show(String(e.reason&&e.reason.message||e.reason).slice(0,140)));})();</script>
 <meta name="robots" content="noindex">
 <link rel="manifest" href="/hq/manifest.json">
 <script>
