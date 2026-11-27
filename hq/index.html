@@ -17,7 +17,7 @@
   import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm").then(({createClient})=>{
     try{Object.keys(localStorage).filter(k=>k.startsWith("sb-")).forEach(k=>localStorage.removeItem(k))}catch(e){}
     const sb=createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY,{auth:{storage:window.sessionStorage,persistSession:true,autoRefreshToken:true}});window.__sb=sb;
-    let hiddenAt=0;document.addEventListener("visibilitychange",()=>{if(document.hidden){hiddenAt=Date.now();return}if(hiddenAt&&Date.now()-hiddenAt>60000){hiddenAt=0;sb.auth.signOut().finally(()=>location.replace("/"))}});
+    let hiddenAt=0;document.addEventListener("visibilitychange",()=>{if(document.hidden){hiddenAt=Date.now();return}if(hiddenAt&&Date.now()-hiddenAt>120000){hiddenAt=0;sb.auth.signOut().finally(()=>location.replace("/"))}});
     const gate=()=>document.getElementById("gate");
     let started=false,recovering=/type=recovery/.test(location.hash);
     async function start(session){
