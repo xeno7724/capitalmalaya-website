@@ -1,1 +1,1 @@
-{"name":"Capital Malaya HQ","short_name":"CM HQ","start_url":"/hq/","scope":"/hq/","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"/assets/icon.png","sizes":"512x512","type":"image/png","purpose":"any"}]}
+{"name": "Capital Malaya", "short_name": "CM HQ", "start_url": "/", "scope": "/", "display": "standalone", "background_color": "#000000", "theme_color": "#000000", "icons": [{"src": "/assets/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}]}
