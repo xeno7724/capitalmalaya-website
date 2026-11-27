@@ -95,6 +95,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Inter Tight",
 .acg{flex:0 0 100%;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0 4px}.acg figure{position:relative;margin:0;aspect-ratio:4/3;overflow:hidden;background:var(--line)}.acg img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}.acg .del{position:absolute;top:4px;right:4px;background:var(--bg)}
 .lb{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.88);display:grid;place-items:center;padding:20px;cursor:zoom-out}.lb img{max-width:100%;max-height:100%;object-fit:contain}
 .dcat{margin:16px 0 0;font-size:13px;font-weight:700;color:var(--mut)}.dc{display:flex;align-items:center;gap:10px}.dc a{flex:1;color:var(--ink);font-weight:600;overflow-wrap:anywhere}.dc small{color:var(--mut);font-size:12px}
+.meet .live{display:inline-block;font:700 11px "Inter Tight",system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;background:var(--ink);color:var(--bg);padding:3px 7px;margin-bottom:8px}
+.meet .join{display:inline-block;margin-top:12px;padding:10px 16px;background:var(--ink);color:var(--bg);font-weight:700;text-decoration:none;min-height:44px;box-sizing:border-box}
 .nextm{margin:8px 0 0;font-size:14px;font-weight:600}
 .legal{max-width:620px;margin:-40px auto 0;padding:0 20px 28px;text-align:right;font-size:12px;line-height:1.6;color:var(--mut)}
 .conn{max-width:620px;margin:0 auto;padding:8px 20px 0;font-size:13px;color:var(--mut)}
@@ -675,12 +677,14 @@ const enqDate=e=>new Date(e.created_at).toLocaleString("en-GB",{day:"numeric",mo
 const seenGet=()=>{try{return +localStorage.getItem("cmhq-seen")||0}catch(e){return 0}},seenSet=v=>{try{localStorage.setItem("cmhq-seen",String(v))}catch(e){}};
 const myRole=()=>R.find(x=>mine(x.k));
 const meetTxt=m=>new Date(m.at).toLocaleString("en-GB",{weekday:"long",day:"numeric",month:"long",hour:"numeric",minute:"2-digit",hour12:true});
+const safeLink=u=>/^https:\/\/[^\s"<>]+$/i.test(u||"");
 const meetSoon=()=>{const m=nts().meet;return m&&new Date(m.at).getTime()>Date.now()-36e5?m:null};
 function renderBell(){const n=nts(),seen=seenGet(),ne=ENQ.filter(e=>Date.parse(e.created_at)>seen),un=n.items.filter(x=>x.ts>seen).length+ne.length,b=document.getElementById("bdg");
   b.hidden=!un;b.textContent=un>9?"9+":un;document.getElementById("bell").setAttribute("aria-expanded",npOpen);
   const p=document.getElementById("np");p.hidden=!npOpen;if(!npOpen)return;if(busyIn(p))return;
-  const m=meetSoon();
-  p.innerHTML=`<div class="npi">${pushHTML()}<h2 style="margin-top:22px!important">Next meeting</h2><p class="hint" style="margin:-4px 0 12px">Set by the CEO. View only.</p>${m?`<div class="meet"><b>${esc(meetTxt(m))}</b><span>${esc(m.where||"")}${m.where&&m.agenda?" · ":""}${esc(m.agenda||"")}</span></div>`:`<div class="empty">No meeting set yet.</div>`}
+  const m=meetSoon(),ceoMe=!!(db&&mine("ceo"));
+  p.innerHTML=`<div class="npi">${pushHTML()}<h2 style="margin-top:22px!important">Next meeting</h2><p class="hint" style="margin:-4px 0 12px">${ceoMe?"Set by you, the CEO.":"Set by the CEO. View only."}</p>${m?`<div class="meet">${new Date(m.at).getTime()<=Date.now()?`<em class="live">Started</em>`:""}<b>${esc(meetTxt(m))}</b><span>${esc(m.where||"")}${m.where&&m.agenda?" · ":""}${esc(m.agenda||"")}</span>${safeLink(m.link)?`<a class="join" href="${esc(m.link)}" target="_blank" rel="noopener">Join meeting</a>`:""}${ceoMe?`<button type="button" data-clrmeet="1" style="margin-top:10px">Cancel meeting</button>`:""}</div>`:`<div class="empty">No meeting set yet.</div>`}
+  ${ceoMe?`<form class="add mtf" id="mtf"><input class="fld" type="datetime-local" name="at" aria-label="Date and time" required style="flex:1 1 100%"><input class="txt" name="where" placeholder="Where? (e.g. Online, Google Meet)" aria-label="Where" style="flex:1 1 100%"><input class="txt" type="url" name="link" placeholder="Online meeting link (optional)" aria-label="Online meeting link" style="flex:1 1 100%"><input class="txt" name="agenda" placeholder="Agenda (optional)" aria-label="Agenda" style="flex:1 1 100%"><button type="submit" class="solid">${m?"Update meeting":"Set meeting"}</button></form>`:""}
   
   ${ne.length?`<h2 style="margin-top:22px!important">New enquiries</h2>${ne.slice(0,10).map(e=>`<div class="nti new"><div><p>${esc(e.name||"Someone")} sent an enquiry</p><small>${esc(enqDate(e))} · see Overall</small></div></div>`).join("")}`:""}
   <h2 style="margin-top:22px!important">Notifications</h2>
@@ -726,6 +730,7 @@ document.body.addEventListener("click",e=>{const t=e.target.closest("button");if
   else if(d.delidea){const c=co();c.ideas=c.ideas.filter(x=>x.id!==d.delidea);saveCo();renderAll()}
   else if(d.delsp){const c=co();c.spend=c.spend.filter(x=>x.id!==d.delsp);saveCo();renderAll()}
   else if(d.delas){const c=co();c.assets=c.assets.filter(x=>x.id!==d.delas);saveCo();renderAll()}
+  else if(d.clrmeet){if(!mine("ceo"))return;const n=nts(),m=n.meet;if(!m)return;n.meet=null;notify("Meeting cancelled: "+meetTxt(m));renderAll()}
   else if(d.delli){const c=co();c.liabs=c.liabs.filter(x=>x.id!==d.delli);saveCo();renderAll()}
   else if(d.delimg){const[aid,iid]=d.delimg.split("|"),x=co().achv.find(y=>y.id===aid);if(x){x.imgs=(x.imgs||[]).filter(i=>i!==iid);saveCo();renderAll()}}
   else if(d.delac){const c=co();c.achv=c.achv.filter(x=>x.id!==d.delac);saveCo();renderAll()}
@@ -751,7 +756,7 @@ document.body.addEventListener("change",e=>{const t=e.target,d=t.dataset;
   else if(d.renm||d.renw){const c=co(),x=(d.renm?c.miles:c.weekly).find(y=>y.id===(d.renm||d.renw)),v=t.value.trim();if(x&&v){x.t=v;saveCo()}}});
 document.body.addEventListener("submit",e=>{e.preventDefault();const f=e.target;
   if(f.id==="ntf"){const v=f.t.value.trim();if(!v){f.t.focus();return}notify(v);renderBell();return}
-  if(f.id==="mtf"){const at=f.at.value;if(!at){f.at.focus();return}const m={at:new Date(at).toISOString(),where:f.where.value.trim(),agenda:f.agenda.value.trim()};nts().meet=m;notify("Next meeting: "+meetTxt(m)+(m.where?" · "+m.where:""));renderAll();return}
+  if(f.id==="mtf"){const at=f.at.value;if(!at){f.at.focus();return}let lk=f.link.value.trim();if(lk&&!/^https?:\/\//i.test(lk))lk="https://"+lk;if(lk&&!safeLink(lk)){f.link.focus();return}const m={at:new Date(at).toISOString(),where:f.where.value.trim(),link:lk,agenda:f.agenda.value.trim()};nts().meet=m;notify("Next meeting: "+meetTxt(m)+(m.where?" · "+m.where:"")+(lk?" · link in HQ":""));renderAll();return}
   if(f.id==="upf"){const v=f.t.value.trim();if(!v||!owner){f.t.focus();return}ups().items.unshift({id:uid(),t:v,d:today});put("company/updates",ups());renderAll();return}
   if(f.id==="idf"){const v=f.t.value.trim();if(!v){f.t.focus();return}co().ideas.push({id:uid(),t:v,w:f.w.value,d:today,s:0});saveCo();renderAll();return}
   if(f.id==="spf"){const a=parseFloat(f.a.value);if(!(a>0)){f.a.focus();return}co().spend.push({id:uid(),d:f.d.value||today,c:f.c.value,a:Math.round(a*100)/100,n:f.n.value.trim()});saveCo();renderAll();return}
