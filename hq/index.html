@@ -22,7 +22,8 @@ window.addEventListener("unhandledrejection",e=>show(String(e.reason&&e.reason.m
   const J="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",E="https://esm.sh/@supabase/supabase-js@2?bundle&target=es2020";
   const SRC=OLD?[E,J]:[J,E];let libErr="";
   const lib=async()=>{for(const x of SRC){try{const m=await import(x);if(m&&m.createClient)return m}catch(e){libErr=String(e&&e.message||e).slice(0,80)}}throw new Error("lib")};
-  lib().then(({createClient})=>{
+  const oops=async(where,e)=>{await domReady;const t="Error ("+where+"): "+String(e&&e.message||e).slice(0,140);[document.getElementById("conn"),document.getElementById("gate-msg")].forEach(m=>{if(m){m.textContent=t;m.style.color="#dc2626"}})};
+  lib().then(({createClient})=>{try{
     try{Object.keys(localStorage).filter(k=>k.startsWith("sb-")).forEach(k=>localStorage.removeItem(k))}catch(e){}
     const sb=createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY,{auth:{storage:window.sessionStorage,persistSession:true,autoRefreshToken:true}});window.__sb=sb;
     let hiddenAt=0;document.addEventListener("visibilitychange",()=>{if(document.hidden){hiddenAt=Date.now();return}if(hiddenAt&&Date.now()-hiddenAt>120000){hiddenAt=0;sb.auth.signOut().finally(()=>location.replace("/"))}});
@@ -44,7 +45,7 @@ window.addEventListener("unhandledrejection",e=>show(String(e.reason&&e.reason.m
       };
       const user={id:async()=>u.id,isOwner:async()=>!!f.is_owner,profiles:async ids=>{const {data}=await sb.from("founders").select("user_id,name").in("user_id",ids);const o={};(data||[]).forEach(r=>o[r.user_id]={name:r.name});return o}};
       const assets={upload:async blob=>{const path=u.id+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,8)+".jpg";const {error}=await sb.storage.from("hq-photos").upload(path,blob,{contentType:blob.type||"image/jpeg"});if(error)throw error;return{id:sb.storage.from("hq-photos").getPublicUrl(path).data.publicUrl}}};
-      done({db,user,assets});
+      if(window.__cmNull){location.reload();return}done({db,user,assets});
     }
     domReady.then(()=>{
       const gf=document.getElementById("gate-form"),gm=document.getElementById("gate-msg");
@@ -60,9 +61,9 @@ window.addEventListener("unhandledrejection",e=>show(String(e.reason&&e.reason.m
       document.getElementById("signout").addEventListener("click",async()=>{await sb.auth.signOut();location.replace("/")});
     });
     const showReset=async()=>{await domReady;gate().hidden=false;document.getElementById("gate-form").hidden=true;document.getElementById("reset-form").hidden=false};
-    sb.auth.getSession().then(async({data:{session}})=>{if(recovering){showReset();return}if(session)start(session);else{await domReady;gate().hidden=false;const m=document.getElementById("conn");if(m)m.textContent="Sign in to see the team's live data."}});
-    sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="PASSWORD_RECOVERY"){recovering=true;showReset();return}if(ses&&!recovering)start(ses)});
-  }).catch(async()=>{done(null);await domReady;const g=document.getElementById("gate");if(!g)return;g.hidden=false;const gf=document.getElementById("gate-form");
+    sb.auth.getSession().then(async({data:{session}})=>{if(recovering){showReset();return}if(session)start(session).catch(e=>oops("start",e));else{await domReady;gate().hidden=false;const m=document.getElementById("conn");if(m)m.textContent="Sign in to see the team's live data."}}).catch(e=>oops("getSession",e));
+    try{sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="PASSWORD_RECOVERY"){recovering=true;showReset();return}if(ses&&!recovering)start(ses).catch(e=>oops("start",e))})}catch(e){oops("auth listener",e)}
+  }catch(e){oops("setup",e)}},async()=>{window.__cmNull=true;done(null);await domReady;const g=document.getElementById("gate");if(!g)return;g.hidden=false;const gf=document.getElementById("gate-form");
     document.getElementById("gate-msg").textContent="Couldn't connect to HQ. Check your internet, turn off ad-block or VPN, or open in Chrome/Safari. Then tap Sign in to try again."+(libErr?" ("+libErr+")":"");
     gf.addEventListener("submit",e=>{e.preventDefault();location.reload()});});
 })();
