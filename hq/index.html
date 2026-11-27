@@ -14,8 +14,10 @@
   window.claude={use:n=>ready.then(x=>x?x[n]||null:null)};
   const C=window.CM_CONFIG||{};
   if(!C.SUPABASE_URL||C.SUPABASE_URL.includes("YOUR-")){done(null);return}
-  const SRC=["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm","https://esm.sh/@supabase/supabase-js@2?bundle"];
-  const lib=async()=>{for(const x of SRC){try{const m=await import(x);if(m&&m.createClient)return m}catch(e){}}throw new Error("lib")};
+  const OLD=(()=>{try{new Function("class A{static{}}");return false}catch(e){return true}})();
+  const J="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",E="https://esm.sh/@supabase/supabase-js@2?bundle&target=es2020";
+  const SRC=OLD?[E,J]:[J,E];let libErr="";
+  const lib=async()=>{for(const x of SRC){try{const m=await import(x);if(m&&m.createClient)return m}catch(e){libErr=String(e&&e.message||e).slice(0,80)}}throw new Error("lib")};
   lib().then(({createClient})=>{
     try{Object.keys(localStorage).filter(k=>k.startsWith("sb-")).forEach(k=>localStorage.removeItem(k))}catch(e){}
     const sb=createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY,{auth:{storage:window.sessionStorage,persistSession:true,autoRefreshToken:true}});window.__sb=sb;
@@ -57,7 +59,7 @@
     sb.auth.getSession().then(async({data:{session}})=>{if(recovering){showReset();return}if(session)start(session);else{await domReady;gate().hidden=false;const m=document.getElementById("conn");if(m)m.textContent="Sign in to see the team's live data."}});
     sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="PASSWORD_RECOVERY"){recovering=true;showReset();return}if(ses&&!recovering)start(ses)});
   }).catch(async()=>{done(null);await domReady;const g=document.getElementById("gate");if(!g)return;g.hidden=false;const gf=document.getElementById("gate-form");
-    document.getElementById("gate-msg").textContent="Couldn't connect to HQ. Check your internet, turn off ad-block or VPN, or open in Chrome/Safari. Then tap Sign in to try again.";
+    document.getElementById("gate-msg").textContent="Couldn't connect to HQ. Check your internet, turn off ad-block or VPN, or open in Chrome/Safari. Then tap Sign in to try again."+(libErr?" ("+libErr+")":"");
     gf.addEventListener("submit",e=>{e.preventDefault();location.reload()});});
 })();
 </script>
