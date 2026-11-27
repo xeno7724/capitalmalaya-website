@@ -6,7 +6,7 @@
 <title>Capital Malaya HQ</title>
 <script src="/config.js"></script>
 <script>/* show script errors on screen (helps debug old phones) */
-(function(){const show=t=>{const go=()=>{const m=document.getElementById("conn");if(m){m.textContent="Error: "+t;m.style.color="#dc2626"}};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go()};
+(function(){const show=t=>{const go=()=>{let m=document.getElementById("errbar");if(!m){m=document.createElement("div");m.id="errbar";m.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:99;background:#dc2626;color:#fff;font:13px/1.4 -apple-system,sans-serif;padding:10px 14px;word-break:break-word";document.body.appendChild(m)}m.textContent=(m.textContent?m.textContent+" | ":"Error: ")+t};if(document.body)go();else document.addEventListener("DOMContentLoaded",go)};
 window.addEventListener("error",e=>show(String(e.message||e.error||"script error").slice(0,140)+" @"+(e.lineno||"?")+":"+(e.colno||"?")));
 window.addEventListener("unhandledrejection",e=>show(String(e.reason&&e.reason.message||e.reason).slice(0,140)));})();</script>
 <meta name="robots" content="noindex">
